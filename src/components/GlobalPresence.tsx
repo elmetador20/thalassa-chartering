@@ -1,100 +1,140 @@
 'use client';
 
+import React from 'react';
 import styled from 'styled-components';
 import dynamic from 'next/dynamic';
-import { Container, Section, Eyebrow, SectionHead, Reveal } from './ui';
-import { globalPresence as gp } from '@/data/siteData';
+import { Reveal, RevealLines } from '@/lib/motion';
+import { Container, Section, SectionLabel, Lede, Meta } from './ui';
+import { globalPresence as gp, hero } from '@/data/siteData';
 
+// The map carries ~32 KB of baked geographic data. Splitting it out keeps it
+// off the critical path; the placeholder reserves the exact box so nothing
+// shifts when it arrives.
 const WorldMap = dynamic(() => import('./WorldMap'), {
   ssr: false,
-  loading: () => <div className="worldmap" />,
+  loading: () => <MapPlaceholder aria-hidden="true" />,
 });
 
-const Map = styled.div`
-  position: relative;
-  margin-top: 8px;
+const Wrap = styled(Section)`
+  overflow: hidden;
+`;
 
-  .worldmap {
-    position: relative;
-    aspect-ratio: 16 / 11;
-    border: 1px solid ${({ theme }) => theme.colors.borderOnDark};
-    border-radius: ${({ theme }) => theme.layout.radiusLg};
-    overflow: hidden;
-    background: ${({ theme }) => theme.colors.ocean};
-  }
-  .leaflet-container {
-    background: ${({ theme }) => theme.colors.ocean};
-    font-family: ${({ theme }) => theme.fonts.body};
-  }
+const Head = styled.div`
+  display: grid;
+  gap: clamp(24px, 3.4vw, 56px);
+  align-items: end;
+  margin-bottom: clamp(36px, 5vw, 64px);
 
-  @media (min-width: 640px) {
-    border: 1px solid ${({ theme }) => theme.colors.borderOnDark};
-    border-radius: ${({ theme }) => theme.layout.radiusLg};
-    background: ${({ theme }) => theme.colors.ocean};
-    aspect-ratio: 16 / 7;
-    overflow: hidden;
-
-    .worldmap {
-      position: absolute;
-      inset: 0;
-      aspect-ratio: auto;
-      border: none;
-      border-radius: 0;
-    }
+  @media (min-width: 1000px) {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   }
 `;
 
-const Note = styled.div`
-  text-align: center;
-  margin-top: 14px;
-  background: rgba(4, 30, 40, 0.72);
-  border: 1px solid ${({ theme }) => theme.colors.borderOnDark};
-  border-radius: 12px;
-  padding: 12px 22px;
+const Heading = styled.h2`
+  margin-top: clamp(22px, 2.6vw, 36px);
+  font-size: ${({ theme }) => theme.type.h1};
+  font-weight: 300;
+  line-height: 1.02;
+  letter-spacing: -0.005em;
+  color: #fff;
+  max-width: 13ch;
+`;
 
-  @media (min-width: 640px) {
-    position: absolute;
-    left: 50%;
-    bottom: 18px;
-    transform: translateX(-50%);
-    margin-top: 0;
-    width: max-content;
-    max-width: 90%;
+/** Matches the map's aspect ratio at each breakpoint so there is no layout shift. */
+const MapPlaceholder = styled.div`
+  width: 100%;
+  aspect-ratio: 540 / 305;
+
+  @media (min-width: 900px) {
+    aspect-ratio: 1002 / 440;
   }
+`;
 
-  .label {
+const MapShell = styled.div`
+  position: relative;
+  border-top: 1px solid ${({ theme }) => theme.colors.lineOnDark};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.lineOnDark};
+  padding-block: clamp(20px, 3vw, 40px);
+
+`;
+
+const Offices = styled.div`
+  margin-top: clamp(32px, 4vw, 56px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  @media (min-width: 860px) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+`;
+
+const Office = styled.div`
+  padding: clamp(18px, 2.2vw, 26px) 0;
+  padding-right: 16px;
+  border-top: 1px solid ${({ theme }) => theme.colors.lineOnDark};
+  position: relative;
+
+  .idx {
     font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 13px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #fff;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    color: ${({ theme }) => theme.colors.orangeOnDark};
   }
-  .sub {
-    margin-top: 6px;
-    font-size: 13px;
-    color: ${({ theme }) => theme.colors.bodyOnDark};
+  .name {
+    display: block;
+    margin-top: 10px;
+    font-size: clamp(17px, 1.8vw, 22px);
+    font-weight: 500;
+    letter-spacing: -0.006em;
+    color: #fff;
   }
 `;
 
 export default function GlobalPresence() {
   return (
-    <Section id="global" $bg="navy">
-      <Container>
-        <SectionHead $dark>
-          <Eyebrow>{gp.eyebrow}</Eyebrow>
-          <h2>{gp.heading}</h2>
-          <p>{gp.body}</p>
-        </SectionHead>
+    <Wrap id="global" $bg="deep">
+      <Container $wide>
+        <Head>
+          <div>
+            <Reveal>
+              <SectionLabel>
+                <b>07</b> {gp.eyebrow}
+              </SectionLabel>
+            </Reveal>
+            <Heading>
+              <RevealLines lines={['Connected to', 'global markets.']} stagger={0.1} />
+            </Heading>
+          </div>
+
+          <Reveal delay={0.12}>
+            <Lede>{gp.body}</Lede>
+          </Reveal>
+        </Head>
+
         <Reveal>
-          <Map>
+          <MapShell>
             <WorldMap />
-            <Note>
-              <div className="label">{gp.networkLabel}</div>
-              <div className="sub">{gp.networkNote}</div>
-            </Note>
-          </Map>
+          </MapShell>
+        </Reveal>
+
+        <Offices>
+          {hero.offices.map((name, i) => (
+            <Reveal key={name} delay={i * 0.06} y={18}>
+              <Office>
+                <span className="idx">{String(i + 1).padStart(2, '0')}</span>
+                <span className="name">{name}</span>
+              </Office>
+            </Reveal>
+          ))}
+        </Offices>
+
+        <Reveal delay={0.1}>
+          <Meta style={{ display: 'block', marginTop: 'clamp(24px, 3vw, 36px)' }}>
+            {gp.networkLabel}
+          </Meta>
         </Reveal>
       </Container>
-    </Section>
+    </Wrap>
   );
 }

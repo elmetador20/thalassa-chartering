@@ -1,180 +1,441 @@
 'use client';
 
-import styled from 'styled-components';
-import { Container, Button } from './ui';
-import { ArrowRight, ArrowDown } from './icons';
+import React, { useRef } from 'react';
+import styled, { css, keyframes } from 'styled-components';
+import { m, EASE_CSS, useScroll, useTransform, useReducedMotion, RevealLines } from '@/lib/motion';
+import { Container, Button, Meta } from './ui';
+import { ArrowRight } from './icons';
+import HeroBackdrop from './HeroBackdrop';
 import { hero } from '@/data/siteData';
+
+/**
+ * The hero's entrance is pure CSS. It is the one thing on the page that must
+ * never fail to appear, and a keyframe animation always resolves to its end
+ * state — unlike a JS-driven animation that can be starved of frames.
+ */
+const enterUp = keyframes`
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to   { opacity: 1; transform: none; }
+`;
+
+const enterFade = keyframes`
+  from { opacity: 0; }
+  to   { opacity: 1; }
+`;
+
+const enters = (animation: ReturnType<typeof keyframes>, delay: number, duration = 0.9) => css`
+  animation: ${animation} ${duration}s ${EASE_CSS} ${delay}s both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+`;
+
+/* ----------------------------------------------------------------- shell -- */
 
 const Wrap = styled.section`
   position: relative;
   min-height: 100svh;
   display: flex;
-  align-items: center;
-  background: ${({ theme }) => theme.colors.navy};
+  flex-direction: column;
   isolation: isolate;
   overflow: hidden;
+  background: ${({ theme }) => theme.colors.navyDeep};
+
+  /* Fallback for browsers without svh support. */
+  @supports not (height: 100svh) {
+    min-height: 100vh;
+  }
 `;
 
-const Bg = styled.video`
+/** The media layer scales slowly as the hero leaves — a slow cinematic push. */
+const MediaLayer = styled(m.div)`
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  will-change: transform;
+`;
+
+/**
+ * Two stacked gradients: a horizontal one that anchors the type column, and a
+ * vertical one that grounds the base of the frame. Navy, never black.
+ */
+const Scrim = styled.div`
   position: absolute;
   inset: 0;
   z-index: -2;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center right;
+  background:
+    linear-gradient(
+      100deg,
+      rgba(0, 34, 64, 0.94) 0%,
+      rgba(0, 34, 64, 0.86) 28%,
+      rgba(0, 51, 102, 0.56) 58%,
+      rgba(0, 51, 102, 0.26) 100%
+    ),
+    linear-gradient(to top, rgba(0, 34, 64, 0.92) 0%, rgba(0, 34, 64, 0) 46%);
 
-  /* Phones are portrait: re-center on the hull so the ship stays in frame. */
-  @media (max-width: 720px) { object-position: 50% center; }
+  @media (max-width: 900px) {
+    background:
+      linear-gradient(
+        to top,
+        rgba(0, 34, 64, 0.96) 12%,
+        rgba(0, 34, 64, 0.72) 48%,
+        rgba(0, 51, 102, 0.38) 100%
+      );
+  }
 `;
 
-/* Cinematic dark-blue overlay — readable text without hiding the ship.
-   Stronger on the left (behind copy), lighter on the right (over the vessel). */
-const Overlay = styled.div`
+/** Deepens as the hero scrolls away so the next section arrives out of black-navy. */
+const ExitScrim = styled(m.div)`
   position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    linear-gradient(90deg, rgba(4,30,40,0.92) 0%, rgba(5,32,42,0.82) 34%, rgba(6,44,59,0.5) 66%, rgba(6,44,59,0.28) 100%),
-    linear-gradient(0deg, rgba(4,20,28,0.72) 0%, rgba(4,20,28,0) 42%);
+  background: ${({ theme }) => theme.colors.navyDeep};
+  pointer-events: none;
 `;
 
-const Inner = styled(Container)`
-  padding-block: clamp(120px, 16vh, 200px);
-`;
+/* ------------------------------------------------------------------ top -- */
 
-const Content = styled.div`
-  max-width: 760px;
-`;
-
-const Eyebrow = styled.span`
-  display: inline-flex;
+const TopStrip = styled(Container)`
+  position: relative;
+  z-index: 1;
+  padding-top: calc(var(--nav-h) + clamp(16px, 3.2vh, 44px));
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 16px;
-  border: 1px solid rgba(244, 122, 50, 0.6);
-  border-radius: ${({ theme }) => theme.layout.radiusPill};
-  background: rgba(244, 122, 50, 0.10);
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #fff;
+  justify-content: space-between;
+  gap: 24px;
+`;
 
-  @media (max-width: 520px) {
-    font-size: 10.5px;
-    letter-spacing: 0.08em;
-    padding: 8px 13px;
-    line-height: 1.5;
+const EyebrowStrip = styled.ul`
+  ${enters(enterUp, 0.15)}
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: clamp(9px, 0.85vw, 11.5px);
+    font-weight: 500;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.76);
+    white-space: nowrap;
   }
+
+  li + li::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    margin: 0 clamp(7px, 1.1vw, 16px);
+    background: ${({ theme }) => theme.colors.orange};
+    flex: none;
+  }
+`;
+
+/** Small global indicator, top right. Desktop only. */
+const GlobalTag = styled.div`
+  ${enters(enterFade, 0.5, 1)}
+  display: none;
+
+  @media (min-width: 1100px) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: none;
+    padding-left: 22px;
+    border-left: 1px solid ${({ theme }) => theme.colors.lineOnDark};
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: ${({ theme }) => theme.colors.orange};
+      box-shadow: 0 0 0 4px rgba(255, 63, 3, 0.18);
+    }
+  }
+`;
+
+/* ----------------------------------------------------------------- body -- */
+
+const Middle = styled(m.div)`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  padding-block: clamp(22px, 4.6vh, 88px);
+  will-change: transform, opacity;
+`;
+
+const Content = styled(Container)`
+  max-width: ${({ theme }) => theme.layout.maxWidth};
 `;
 
 const Title = styled.h1`
-  margin-top: 28px;
+  max-width: 17ch;
+  font-size: ${({ theme }) => theme.type.display};
+  font-weight: 300;
+  line-height: 1.015;
+  letter-spacing: -0.016em;
   color: #fff;
-  font-size: clamp(36px, 11vw, 88px);
-  font-weight: 700;
-  line-height: 1.04;
-  letter-spacing: -0.02em;
 
-  @media (max-width: 520px) { margin-top: 22px; }
+  em {
+    font-style: normal;
+    color: ${({ theme }) => theme.colors.orange};
+  }
+
+  @media (min-width: 1500px) {
+    max-width: 19ch;
+  }
 `;
 
 const Body = styled.p`
-  margin-top: 26px;
-  max-width: 560px;
-  font-size: clamp(16px, 1.6vw, 19px);
-  line-height: 1.65;
-  color: rgba(235, 243, 245, 0.86);
+  ${enters(enterUp, 0.72)}
+  margin-top: clamp(18px, 2.6vh, 34px);
+  max-width: 54ch;
+  font-size: ${({ theme }) => theme.type.bodyLg};
+  line-height: 1.55;
+
+  /* Short phones: the paragraph gives up a little size so the CTAs stay up. */
+  @media (max-width: 520px) {
+    font-size: ${({ theme }) => theme.type.body};
+    line-height: 1.5;
+  }
+  color: rgba(255, 255, 255, 0.78);
 `;
 
 const Actions = styled.div`
-  margin-top: 38px;
+  ${enters(enterUp, 0.86)}
+  margin-top: clamp(22px, 3.4vh, 44px);
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 14px;
 
   @media (max-width: 520px) {
-    margin-top: 30px;
-    gap: 12px;
-    a { flex: 1 1 100%; }
+    gap: 10px;
+
+    a {
+      flex: 1 1 100%;
+      min-height: 48px;
+    }
   }
 `;
 
-const Trust = styled.p`
-  margin-top: 30px;
-  font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  color: rgba(235, 243, 245, 0.66);
+/* --------------------------------------------------------------- bottom -- */
+
+const BottomBar = styled.div`
+  ${enters(enterFade, 1, 1)}
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid ${({ theme }) => theme.colors.lineOnDark};
 `;
 
-const Scroll = styled.a`
-  position: absolute;
-  left: 50%;
-  bottom: 26px;
-  transform: translateX(-50%);
-  z-index: 1;
-  display: inline-flex;
-  flex-direction: column;
+const BottomInner = styled(Container)`
+  display: flex;
   align-items: center;
-  gap: 6px;
-  color: rgba(255, 255, 255, 0.7);
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 64px;
+  padding-block: 14px;
+
+  @media (max-width: 560px) {
+    min-height: 52px;
+    padding-block: 10px;
+  }
+`;
+
+const ScrollCue = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 10.5px;
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.2em;
   text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.72);
+  transition: color 0.3s ease;
 
-  svg { animation: bob 1.8s ease-in-out infinite; }
-  &:hover { color: #fff; }
+  .full {
+    @media (max-width: 560px) {
+      display: none;
+    }
+  }
+  .short {
+    display: none;
+    @media (max-width: 560px) {
+      display: inline;
+    }
+  }
 
-  @keyframes bob {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(6px); }
+  b {
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.orangeOnDark};
+  }
+
+  /* Animated track: an orange pulse travelling down a hairline. */
+  .track {
+    position: relative;
+    display: block;
+    width: 1px;
+    height: 34px;
+    background: ${({ theme }) => theme.colors.lineOnDark};
+    overflow: hidden;
+  }
+  .track::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 14px;
+    background: ${({ theme }) => theme.colors.orange};
+    animation: heroScrollCue 2.4s ${({ theme }) => theme.motion.easeInOut} infinite;
+  }
+
+  &:hover {
+    color: #fff;
+  }
+
+  @keyframes heroScrollCue {
+    0% {
+      transform: translateY(-100%);
+    }
+    60%,
+    100% {
+      transform: translateY(340%);
+    }
+  }
+
+  @media (max-width: 560px) {
+    .track {
+      height: 26px;
+    }
   }
 `;
 
-export default function Hero() {
-  return (
-    <Wrap id="home">
-      <Bg
-        autoPlay
-        muted
-        loop
-        playsInline
-        poster="/assets/cargo-ship-poster.jpg"
-        aria-hidden="true"
-      >
-        <source src="/assets/cargo-ship.webm" type="video/webm" />
-        <source src="/assets/cargo-ship.mp4" type="video/mp4" />
-      </Bg>
-      <Overlay />
+const Offices = styled.ul`
+  display: none;
 
-      <Inner as="div">
-        <Content>
-          <Eyebrow>{hero.eyebrow}</Eyebrow>
+  @media (min-width: 760px) {
+    display: flex;
+    align-items: center;
+    gap: clamp(14px, 1.8vw, 28px);
+
+    li {
+      font-family: ${({ theme }) => theme.fonts.mono};
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.6);
+    }
+  }
+`;
+
+const OfficesMobile = styled.span`
+  display: none;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: right;
+
+  /* Small tablets only: phones show the scroll cue on its own. */
+  @media (min-width: 560px) and (max-width: 759px) {
+    display: block;
+  }
+`;
+
+/* ------------------------------------------------------------ component -- */
+
+export default function Hero() {
+  const ref = useRef<HTMLElement>(null);
+  const reduce = useReducedMotion();
+
+  // Scroll-linked exit: media pushes in, copy lifts and fades, navy deepens.
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start start', 'end start'],
+  });
+  const mediaScale = useTransform(scrollYProgress, [0, 1], [1, reduce ? 1 : 1.16]);
+  const mediaY = useTransform(scrollYProgress, [0, 1], ['0%', reduce ? '0%' : '6%']);
+  const copyY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : -90]);
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.72], [1, reduce ? 1 : 0]);
+  const exitOpacity = useTransform(scrollYProgress, [0.2, 1], [0, reduce ? 0 : 0.72]);
+
+  return (
+    <Wrap id="home" ref={ref}>
+      <MediaLayer style={{ scale: mediaScale, y: mediaY }}>
+        <HeroBackdrop />
+      </MediaLayer>
+      <Scrim />
+      <ExitScrim style={{ opacity: exitOpacity }} />
+
+      <TopStrip $wide>
+        <EyebrowStrip>
+          {hero.eyebrowItems.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </EyebrowStrip>
+
+        {/* <GlobalTag>
+          <span className="dot" aria-hidden="true" />
+          <Meta>Five offices · Global coverage</Meta>
+        </GlobalTag> */}
+      </TopStrip>
+
+      <Middle style={{ y: copyY, opacity: copyOpacity }}>
+        <Content $wide>
           <Title>
-            {hero.titleLine1}
-            <br />
-            {hero.titleLine2}
+            <RevealLines
+              delay={0.25}
+              stagger={0.12}
+              lines={[
+                <>
+                  Intelligence that moves markets<em>.</em>
+                </>,
+                <>
+                  Execution that moves business<em>.</em>
+                </>,
+              ]}
+            />
           </Title>
+
           <Body>{hero.body}</Body>
+
           <Actions>
             <Button as="a" href={hero.primaryCta.href} $variant="primary">
-              {hero.primaryCta.label} <ArrowRight size={18} />
+              {hero.primaryCta.label}
+              <ArrowRight size={17} />
             </Button>
-            <Button as="a" href={hero.secondaryCta.href} $variant="outlineLight">
+            <Button as="a" href={hero.secondaryCta.href} $variant="onDark">
               {hero.secondaryCta.label}
             </Button>
           </Actions>
-          <Trust>{hero.trust}</Trust>
         </Content>
-      </Inner>
+      </Middle>
 
-      <Scroll href="#about" aria-label="Scroll to About">
-        Scroll
-        <ArrowDown size={20} />
-      </Scroll>
+      <BottomBar>
+        <BottomInner $wide>
+          <ScrollCue href="#statement">
+            <b>01</b>
+            <span className="track" aria-hidden="true" />
+            <span className="full">{hero.scrollLabel}</span>
+            <span className="short">Scroll</span>
+          </ScrollCue>
+
+          <Offices aria-label="Office locations">
+            {hero.offices.map((o) => (
+              <li key={o}>{o}</li>
+            ))}
+          </Offices>
+          <OfficesMobile>{hero.trust}</OfficesMobile>
+        </BottomInner>
+      </BottomBar>
     </Wrap>
   );
 }

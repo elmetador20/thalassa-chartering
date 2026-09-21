@@ -9,28 +9,84 @@ export const brand = {
 };
 
 export const nav = {
+  // Primary bar — deliberately short. The full index lives in the overlay menu.
   links: [
     { label: 'About', href: '#about' },
-    { label: 'Verticals', href: '#services' },
-    { label: 'Model', href: '#model' },
+    { label: 'Capabilities', href: '#capabilities' },
     { label: 'Chartering', href: '#chartering' },
     { label: 'Projects', href: '#projects' },
     { label: 'Global Presence', href: '#global' },
-    { label: 'Leadership', href: '#leadership' },
-    { label: 'Contact', href: '#contact' },
   ],
-  cta: { label: 'Get in Touch', href: '#contact' },
+  cta: { label: 'Contact', href: '#contact' },
+  // Full-screen overlay menu — every section, grouped.
+  menuGroups: [
+    {
+      heading: 'Group',
+      links: [
+        { label: 'Who we are', href: '#about' },
+        { label: 'The INCWORX model', href: '#model' },
+        { label: '2030 ambition', href: '#ambition' },
+        { label: 'Global presence', href: '#global' },
+        { label: 'Sustainability', href: '#sustainability' },
+        { label: 'Leadership', href: '#leadership' },
+      ],
+    },
+    {
+      heading: 'Capabilities',
+      links: [
+        { label: 'Intelligence', href: '#intelligence' },
+        { label: 'Datamatics', href: '#datamatics' },
+        { label: 'Tectonics', href: '#tectonics' },
+        { label: 'Digitronics', href: '#digitronics' },
+        { label: 'Chartering', href: '#chartering' },
+        { label: 'Projects', href: '#projects' },
+      ],
+    },
+  ],
 };
 
 export const hero = {
-  eyebrow: 'Market Intelligence • Chartering • Dry Bulk • Tectonics • Datamatics • Digitronics',
+  // Rendered as a technical strip, one term per cell.
+  eyebrowItems: [
+    'Market intelligence',
+    'Chartering',
+    'Dry bulk',
+    'Tectonics',
+    'Datamatics',
+    'Digitronics',
+  ],
   titleLine1: 'Intelligence that moves markets.',
   titleLine2: 'Execution that moves business.',
   body:
     'INCWORX Intelligence Group is a market intelligence, analytics, infrastructure and technology platform. Better intelligence leads to better decisions. Better decisions create better execution.',
-  primaryCta: { label: 'Explore Our Verticals', href: '#services' },
-  secondaryCta: { label: 'Contact INCWORX', href: '#contact' },
+  primaryCta: { label: 'Explore our capabilities', href: '#capabilities' },
+  secondaryCta: { label: 'Talk to our team', href: '#contact' },
   trust: 'London • Dubai • Delhi • Singapore • Hong Kong',
+  offices: ['London', 'Dubai', 'Delhi', 'Singapore', 'Hong Kong'],
+  scrollLabel: 'Scroll to explore',
+};
+
+// Hero background source.
+//   'pin'   — the Pinterest embed (client-supplied pin)
+//   'video' — the locally hosted maritime encodes in /public/assets
+// Switching between them is a one-word change; see HeroBackdrop.tsx.
+export const heroMedia = {
+  source: 'video' as 'pin' | 'video',
+  pinId: '735916395430287283',
+};
+
+// Cinematic transition out of the hero. Uses the company's own stated
+// principle rather than invented positioning copy.
+export const statement = {
+  label: 'The principle',
+  lines: [
+    'Better intelligence leads',
+    'to better decisions.',
+    'Better decisions create',
+    'better execution.',
+  ],
+  support:
+    'Our foundation lies in global commodity and ocean-freight markets, with particular expertise across iron ore, coal, steel, minerals and dry bulk shipping.',
 };
 
 export const about = {
@@ -42,7 +98,7 @@ export const about = {
     'Better intelligence leads to better decisions. Better decisions create better execution.',
   foundation:
     'Our foundation lies in global commodity and ocean-freight markets, with particular expertise across iron ore, coal, steel, minerals and dry bulk shipping.',
-  image: '/images/about-port.jpg',
+  image: '/images/img1.jpeg',
   blocks: [
     {
       key: 'intelligence',
@@ -85,7 +141,7 @@ export const services = {
       icon: 'datamatics',
       title: 'Datamatics',
       text: 'Data engineering, analytics, predictive modelling and operational intelligence for commercial decisions.',
-      image: '/images/service-trading.jpg',
+      image: '/images/service-trading.jpeg',
       href: '#datamatics',
     },
     {
@@ -93,7 +149,7 @@ export const services = {
       icon: 'tectonics',
       title: 'Tectonics',
       text: 'Port infrastructure, marine construction, engineering and project execution.',
-      image: '/images/about-port.jpg',
+      image: '/images/about-port.jpeg',
       href: '#tectonics',
     },
     {
@@ -101,7 +157,7 @@ export const services = {
       icon: 'digitronics',
       title: 'Digitronics',
       text: 'Digital transformation, software engineering, AI, automation and cloud infrastructure.',
-      image: '/images/service-mobility.jpg',
+      image: '/images/service-mobility.jpeg',
       href: '#digitronics',
     },
   ],
@@ -138,15 +194,17 @@ export const model = {
       text: 'Software, automation, AI, cloud, digital systems and technology infrastructure.',
     },
   ],
-  closing: 'One Group. Four capabilities. One integrated approach.',
+  closing: 'One group. Four capabilities. One integrated approach.',
 };
 
 export const ambition = {
   eyebrow: 'Building Toward 2030',
   heading: '2030 Business Ambition.',
-  figure: 'USD 5 MILLION',
+  figure: 'USD 1 BILLION',
+  figureValue: 1,
+  figureUnit: 'Billion',
   figureLabel: '2030 Business Ambition',
-  lede: "INCWORX's 2030 ambition is to build a USD 5 million business platform driven by intelligence, infrastructure, data and technology.",
+  lede: "INCWORX's 2030 ambition is to build a USD 1 billion business platform driven by intelligence, infrastructure, data and technology.",
   aimsHeading: 'By 2030, INCWORX aims to',
   aims: [
     'Expand global market intelligence and commodity research.',
@@ -160,7 +218,7 @@ export const ambition = {
   ],
   mission: {
     eyebrow: 'Our Mission',
-    heading: 'The Intelligence and Execution Partner Behind Smarter Global Trade',
+    heading: 'The intelligence and execution partner behind smarter global trade',
     body: 'INCWORX transforms information into commercial advantage.',
     formula: 'Commodity Research + Market Statistics + Data Analytics + Predictive Modelling + Chartering + Infrastructure + Technology',
     flow: 'Insight → Decision → Transaction → Execution',
@@ -169,7 +227,7 @@ export const ambition = {
 
 export const intelligence = {
   eyebrow: 'Intelligence',
-  heading: 'Understanding Markets Before They Move',
+  heading: 'Understanding markets before they move',
   body: 'INCWORX Intelligence is the foundation of the Group. We provide market intelligence and commercial insights across commodity and ocean-freight markets, combining research, statistics, industry inputs and market connectivity.',
   areasHeading: 'Core Areas',
   areas: ['Commodity market intelligence', 'Iron ore research', 'Pellet market research', 'Coal market intelligence', 'Steel market analysis', 'Commodity pricing', 'Import & export analysis', 'Trade-flow intelligence', 'Demand-supply analysis', 'Ocean freight intelligence', 'Dry bulk market intelligence', 'Market statistics', 'Commercial research', 'Consulting & market studies'],
@@ -221,7 +279,7 @@ export const divisions = {
   },
   tectonics: {
     eyebrow: 'Tectonics',
-    heading: 'Engineering Infrastructure With Intelligence',
+    heading: 'Engineering infrastructure with intelligence',
     body: 'Tectonics is INCWORX’s infrastructure and marine-construction division. It combines engineering rigor with market intelligence to support the development of ports, terminals, jetties, marine, industrial and cargo-handling infrastructure.',
     developsHeading: 'Development Focus',
     develops: ['Ports', 'Terminals', 'Jetties', 'Marine infrastructure', 'Industrial infrastructure', 'Cargo-handling facilities', 'Supporting infrastructure'],
@@ -237,7 +295,7 @@ export const divisions = {
   },
   digitronics: {
     eyebrow: 'Digitronics',
-    heading: 'Technology That Transforms the Way Organizations Operate',
+    heading: 'Technology that transforms the way organizations operate',
     body: 'Digitronics is INCWORX’s technology and digital transformation division. It helps organizations modernize technology ecosystems, automate operations, build scalable digital products and adopt AI securely and effectively.',
     capabilitiesHeading: 'Core Capabilities',
     capabilities: ['Digital Transformation', 'Software Engineering', 'Web & Digital Platforms', 'UI/UX & Product Design', 'AI & Automation', 'Data & Cloud Infrastructure', 'Technology Consulting', 'Business Intelligence', 'Private AI Infrastructure', 'Edge AI Infrastructure', 'Digital Communication'],
@@ -276,31 +334,52 @@ export const globalPresence = {
 export const projects = {
   eyebrow: 'Representative Project Experience',
   heading: 'Manki & Pavinakurve.',
-  figure: '₹12,500 Cr',
+  figure: '$1.32 Billion',
+  figureValue: 1.32,
+  figureUnit: 'Billion',
+  // Two decimals: the combined figure is the only one that carries them.
+  figureDecimals: 2,
   figureLabel: 'Combined Project Portfolio',
   items: [
     {
       id: 'manki',
-      no: 'Project 01',
+      no: '01',
       title: 'Manki Port Project',
+      titleLines: ['Manki', 'Port Project'],
       category: 'Port Infrastructure · DBFOT',
       location: 'Manki, Karnataka, India',
-      description: 'All-weather deepwater port development by Bederwal Consortium on Design-Build-Finance-Operate-Transfer basis — total investment outlay of ₹7,500 Crores.',
-      image: '/images/manki.jpeg',
+      description: 'All-weather deepwater port development by Bederwal Consortium on Design-Build-Finance-Operate-Transfer basis — total investment outlay of $794 Million.',
+      // Figure restated from the description above — no new numbers introduced.
+      value: 794,
+      valueUnit: 'Million',
+      valueLabel: 'Total investment outlay',
+      developer: 'Bederwal Consortium',
+      basis: 'Design–Build–Finance–Operate–Transfer',
+      asset: 'All-weather deepwater port',
+      image: '/images/manki-port.jpg',
+      alt: 'Aerial view of a deepwater container berth with quay cranes working a vessel',
       href: '#contact',
     },
     {
       id: 'pavinakurve',
-      no: 'Project 02',
+      no: '02',
       title: 'Pavinakurve Port Project',
+      titleLines: ['Pavinakurve', 'Port Project'],
       category: 'Port Infrastructure · DBFOT',
       location: 'Pavinakurve, Karnataka, India',
-      description: 'All-weather deepwater port development by Bederwal Consortium on Design-Build-Finance-Operate-Transfer basis — investment outlay of ₹5,000 Crores.',
-      image: '/images/pavin.jpeg',
+      description: 'All-weather deepwater port development by Bederwal Consortium on Design-Build-Finance-Operate-Transfer basis — investment outlay of $529 Million.',
+      value: 529,
+      valueUnit: 'Million',
+      valueLabel: 'Investment outlay',
+      developer: 'Bederwal Consortium',
+      basis: 'Design–Build–Finance–Operate–Transfer',
+      asset: 'All-weather deepwater port',
+      image: '/images/pavinakurve-port.jpg',
+      alt: 'Top-down aerial of a port channel with vessels under way beside container terminals',
       href: '#contact',
     },
   ],
-  closing: 'Two Projects. One Integrated Infrastructure Capability.',
+  closing: 'Two projects. One integrated infrastructure capability.',
   experienceHeading: 'Project Experience Includes',
   experience: ['Port infrastructure', 'Marine construction', 'Cargo-handling infrastructure', 'Project planning', 'Engineering coordination', 'Commercial assessment', 'Project management', 'Stakeholder coordination', 'Regulatory interface'],
 };
@@ -328,142 +407,6 @@ export const sustainability = {
     { title: 'People & Communities', text: 'Supporting the people and communities connected to our work.' },
     { title: 'Environmental Progress', text: 'Working toward a lower-impact, more sustainable future.' },
   ],
-};
-
-export const navPanels: Record<string, { rail: { heading: string; body: string; link: { label: string; href: string } } }> = {
-  About: {
-    rail: {
-      heading: 'Who We Are',
-      body: 'Better intelligence leads to better decisions. Better decisions create better execution.',
-      link: { label: 'More About Us', href: '#about' },
-    },
-  },
-  Verticals: {
-    rail: {
-      heading: 'One Group. Four Capabilities.',
-      body: 'Intelligence, Datamatics, Tectonics and Digitronics — one integrated approach.',
-      link: { label: 'View All Verticals', href: '#services' },
-    },
-  },
-  Chartering: {
-    rail: {
-      heading: 'Chartering',
-      body: 'Connecting cargo with capacity across major commodity and maritime markets.',
-      link: { label: 'Chartering Services', href: '#chartering' },
-    },
-  },
-  Projects: {
-    rail: {
-      heading: 'Manki & Pavinakurve',
-      body: '₹12,500 Cr in combined project value and investment scale.',
-      link: { label: 'View Projects', href: '#projects' },
-    },
-  },
-  'Global Presence': {
-    rail: {
-      heading: 'Global Presence',
-      body: 'London • Dubai • Delhi • Singapore • Hong Kong.',
-      link: { label: 'Our Network', href: '#global' },
-    },
-  },
-  Contact: {
-    rail: {
-      heading: 'Contact',
-      body: 'Talk to INCWORX about your requirements.',
-      link: { label: 'Contact Details', href: '#contact' },
-    },
-  },
-};
-
-export const megaMenu = {
-  columns: [
-    {
-      heading: 'Explore',
-      links: [
-        { label: 'About', href: '#about' },
-        { label: 'Verticals', href: '#services' },
-        { label: 'Model', href: '#model' },
-        { label: 'Chartering', href: '#chartering' },
-        { label: 'Projects', href: '#projects' },
-      ],
-    },
-    {
-      heading: 'Global & Company',
-      links: [
-        { label: 'Global Presence', href: '#global' },
-        { label: 'Leadership', href: '#leadership' },
-        { label: 'Sustainability', href: '#sustainability' },
-        { label: 'Contact', href: '#contact' },
-      ],
-    },
-    {
-      heading: 'Divisions',
-      links: [
-        { label: 'Intelligence', href: '#intelligence' },
-        { label: 'Datamatics', href: '#datamatics' },
-        { label: 'Tectonics', href: '#tectonics' },
-        { label: 'Digitronics', href: '#digitronics' },
-      ],
-    },
-  ],
-  featured: {
-    heading: 'Who We Are',
-    body: 'INCWORX Intelligence Group is a market intelligence, analytics, infrastructure and technology platform. Better intelligence leads to better decisions. Better decisions create better execution.',
-    link: { label: 'More About Us', href: '#about' },
-  },
-  banner: {
-    image: '/images/about-port.jpg',
-    ctas: [
-      { label: 'Explore Our Verticals', href: '#services' },
-      { label: 'Get in Touch', href: '#contact' },
-    ],
-  },
-};
-
-// Right-rail content for the hamburger mega menu — swaps as each column link
-// is hovered (cascading-menu effect). Falls back to megaMenu.featured.
-export const megaRails: Record<string, { heading: string; body: string; link: { label: string; href: string } }> = {
-  About: navPanels.About.rail,
-  Verticals: navPanels.Verticals.rail,
-  Model: {
-    heading: 'The INCWORX Model',
-    body: 'INTELLIGENCE → DATA → INFRASTRUCTURE → TECHNOLOGY.',
-    link: { label: 'Our Model', href: '#model' },
-  },
-  Chartering: navPanels.Chartering.rail,
-  Projects: navPanels.Projects.rail,
-  'Global Presence': navPanels['Global Presence'].rail,
-  Leadership: {
-    heading: leadership.heading,
-    body: leadership.body,
-    link: { label: 'Meet the Team', href: '#leadership' },
-  },
-  Sustainability: {
-    heading: 'Sustainability',
-    body: sustainability.body,
-    link: { label: 'Our Approach', href: '#sustainability' },
-  },
-  Contact: navPanels.Contact.rail,
-  Intelligence: {
-    heading: services.items[0].title,
-    body: services.items[0].text,
-    link: { label: 'Explore Intelligence', href: '#intelligence' },
-  },
-  Datamatics: {
-    heading: services.items[1].title,
-    body: services.items[1].text,
-    link: { label: 'Explore Datamatics', href: '#datamatics' },
-  },
-  Tectonics: {
-    heading: services.items[2].title,
-    body: services.items[2].text,
-    link: { label: 'Explore Tectonics', href: '#tectonics' },
-  },
-  Digitronics: {
-    heading: services.items[3].title,
-    body: services.items[3].text,
-    link: { label: 'Explore Digitronics', href: '#digitronics' },
-  },
 };
 
 export const contactCta = {

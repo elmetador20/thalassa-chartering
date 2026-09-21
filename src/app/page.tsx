@@ -1,17 +1,15 @@
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
+import StatementSection from '@/components/StatementSection';
 import AboutSection from '@/components/AboutSection';
-import ServicesSection from '@/components/ServicesSection';
-import WhyIncworx from '@/components/WhyIncworx';
-import AmbitionBand from '@/components/AmbitionBand';
-import IntelligenceSection from '@/components/IntelligenceSection';
+import CapabilitiesSection from '@/components/CapabilitiesSection';
+import ModelSection from '@/components/ModelSection';
 import CharteringSection from '@/components/CharteringSection';
 import ProjectsSection from '@/components/ProjectsSection';
-import DivisionsSection from '@/components/DivisionsSection';
+import AmbitionSection from '@/components/AmbitionSection';
 import GlobalPresence from '@/components/GlobalPresence';
+import SustainabilitySection from '@/components/SustainabilitySection';
 import LeadershipSection from '@/components/LeadershipSection';
-import Sustainability from '@/components/Sustainability';
-import CTASection from '@/components/CTASection';
 import ContactSection from '@/components/ContactSection';
 import Footer from '@/components/Footer';
 
@@ -21,18 +19,16 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
+        <StatementSection />
         <AboutSection />
-        <ServicesSection />
-        <WhyIncworx />
-        <AmbitionBand />
-        <IntelligenceSection />
+        <CapabilitiesSection />
+        <ModelSection />
         <CharteringSection />
         <ProjectsSection />
-        <DivisionsSection />
+        <AmbitionSection />
         <GlobalPresence />
+        <SustainabilitySection />
         <LeadershipSection />
-        <Sustainability />
-        <CTASection />
         <ContactSection />
       </main>
       <Footer />

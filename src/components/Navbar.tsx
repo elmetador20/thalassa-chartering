@@ -1,686 +1,533 @@
 'use client';
 
-import styled, { css } from 'styled-components';
-import { useEffect, useRef, useState } from 'react';
-import { Menu, Close, ArrowRight } from './icons';
-import {
-  brand, nav, megaMenu, navPanels, megaRails,
-  about, services, projects, globalPresence, contact, chartering,
-} from '@/data/siteData';
+import React, { useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
+import styled, { css, keyframes } from 'styled-components';
+import { m, EASE_CSS, useScroll, useTransform } from '@/lib/motion';
+import { Container, Button } from './ui';
+import { ArrowRight, Close, Menu } from './icons';
+import { nav, hero, contact } from '@/data/siteData';
 
-const BAR_HEIGHT = 74;
-const CLOSE_DELAY = 140;
+/* ------------------------------------------------------------------ bar -- */
 
 const Bar = styled.header<{ $solid: boolean }>`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, backdrop-filter 0.3s ease;
+  inset: 0 0 auto;
+  z-index: ${({ theme }) => theme.z.nav};
+  transition:
+    background 0.45s ${({ theme }) => theme.motion.ease},
+    border-color 0.45s ease,
+    backdrop-filter 0.45s ease;
+  border-bottom: 1px solid transparent;
+
+  /* Only while transparent: a soft scrim so the wordmark and links stay
+     legible over bright footage (sunsets, open sky). */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: calc(var(--nav-h) + 26px);
+    pointer-events: none;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 34, 64, 0.62) 0%,
+      rgba(0, 34, 64, 0.28) 55%,
+      rgba(0, 34, 64, 0) 100%
+    );
+    opacity: ${({ $solid }) => ($solid ? 0 : 1)};
+    transition: opacity 0.45s ease;
+  }
+
   ${({ $solid, theme }) =>
-    $solid
-      ? css`
-          background: rgba(4, 30, 40, 0.82);
-          backdrop-filter: saturate(160%) blur(12px);
-          border-bottom: 1px solid ${theme.colors.borderOnDark};
-          box-shadow: 0 8px 30px rgba(4, 15, 20, 0.28);
-        `
-      : css`
-          background: transparent;
-          border-bottom: 1px solid transparent;
-        `}
+    $solid &&
+    css`
+      background: rgba(0, 34, 64, 0.86);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      border-bottom-color: ${theme.colors.lineOnDark};
+    `}
 `;
 
-const Inner = styled.div`
-  max-width: ${({ theme }) => theme.layout.maxWidth};
-  margin: 0 auto;
-  padding: 0 ${({ theme }) => theme.layout.gutter};
-  height: ${BAR_HEIGHT}px;
+const Inner = styled(Container)`
+  position: relative;
+  z-index: 1;
+  height: var(--nav-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: clamp(16px, 3vw, 44px);
 `;
 
-const Left = styled.div`
-  display: inline-flex;
+const Brand = styled.a`
+  display: flex;
   align-items: center;
-  gap: 14px;
-`;
+  flex: none;
 
-const Word = styled.a`
-  display: inline-flex;
-  align-items: center;
-`;
-
-const Logo = styled.img`
-  display: block;
-  height: 24px;
-  width: auto;
+  /* The wordmark is 6.9:1, so height drives everything. Roughly 45% of the
+     bar height reads as confident without crowding the navigation. */
+  img {
+    width: auto;
+    height: clamp(24px, 2.5vw, 34px);
+    object-fit: contain;
+  }
 `;
 
 const Links = styled.nav`
   display: none;
-  align-items: center;
-  gap: 30px;
 
-  @media (min-width: 1024px) { display: flex; }
+  @media (min-width: 1060px) {
+    display: flex;
+    align-items: center;
+    gap: clamp(20px, 2.3vw, 38px);
+    margin-left: auto;
+  }
 `;
 
-const NavLink = styled.a<{ $active?: boolean }>`
+const NavLink = styled.a<{ $active: boolean }>`
   position: relative;
-  font-size: 14.5px;
+  padding: 6px 0;
+  font-size: 14px;
   font-weight: 500;
-  padding-block: 26px;
-  color: ${({ $active }) => ($active ? '#fff' : 'rgba(255, 255, 255, 0.82)')};
-  transition: color 0.18s ease;
-  &:hover { color: #fff; }
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+  color: ${({ $active, theme }) => ($active ? theme.colors.white : 'rgba(255,255,255,0.72)')};
+  transition: color 0.25s ease;
+
   &::after {
     content: '';
     position: absolute;
-    left: 0; bottom: 18px;
-    height: 2px;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 1px;
     background: ${({ theme }) => theme.colors.orange};
-    transition: width 0.22s ease;
-    width: ${({ $active }) => ($active ? '100%' : '0')};
+    transform: scaleX(${({ $active }) => ($active ? 1 : 0)});
+    transform-origin: left;
+    transition: transform 0.4s ${({ theme }) => theme.motion.ease};
   }
-  &:hover::after { width: 100%; }
-  &:hover { color: ${({ theme }) => theme.colors.orangeLight}; }
-`;
 
-const Cta = styled.a`
-  display: none;
-  padding: 11px 20px;
-  border-radius: ${({ theme }) => theme.layout.radius};
-  background: ${({ theme }) => theme.colors.orange};
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background 0.18s ease, transform 0.18s ease;
-  &:hover { background: ${({ theme }) => theme.colors.orangeLight}; transform: translateY(-1px); }
-  @media (min-width: 1024px) { display: inline-flex; }
-`;
-
-const Burger = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #fff;
-  padding: 8px;
-  margin-left: -8px;
-  cursor: pointer;
-  transition: color 0.18s ease, transform 0.18s ease;
-  &:hover { color: ${({ theme }) => theme.colors.orange}; }
-`;
-
-/* Dim + block the page behind the open hamburger menu so its banner buttons
-   never visually collide with hero content underneath. */
-const Backdrop = styled.div<{ $open: boolean }>`
-  position: fixed;
-  inset: 0;
-  z-index: 98;
-  background: rgba(3, 18, 24, 0.6);
-  backdrop-filter: blur(2px);
-  transition: opacity 0.28s ease;
-  ${({ $open }) =>
-    $open
-      ? css`opacity: 1; pointer-events: auto;`
-      : css`opacity: 0; pointer-events: none;`}
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`;
-
-/* Shared drop-down shell (hamburger mega menu + hover dropdowns). */
-const panelShell = css`
-  position: fixed;
-  top: ${BAR_HEIGHT}px;
-  left: 0;
-  right: 0;
-  z-index: 99;
-  background: ${({ theme }) => theme.colors.navyDeep};
-  border-top: 2px solid ${({ theme }) => theme.colors.orange};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.borderOnDark};
-  box-shadow: 0 30px 60px rgba(4, 15, 20, 0.45);
-  transition: opacity 0.28s ease, transform 0.28s ease;
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-`;
-
-const Panel = styled.div<{ $open: boolean }>`
-  ${panelShell}
-  max-height: calc(100vh - ${BAR_HEIGHT}px);
-  max-height: calc(100svh - ${BAR_HEIGHT}px);
-  overflow-y: auto;
-  ${({ $open }) =>
-    $open
-      ? css`opacity: 1; transform: translateY(0); pointer-events: auto;`
-      : css`opacity: 0; transform: translateY(-14px); pointer-events: none;`}
-`;
-
-const DropPanel = styled.div<{ $open: boolean }>`
-  ${panelShell}
-  display: none;
-  @media (min-width: 1024px) { display: block; }
-  ${({ $open }) =>
-    $open
-      ? css`opacity: 1; transform: translateY(0); pointer-events: auto;`
-      : css`opacity: 0; transform: translateY(-10px); pointer-events: none;`}
-`;
-
-const PanelInner = styled.div`
-  max-width: ${({ theme }) => theme.layout.maxWidth};
-  margin: 0 auto;
-  padding: clamp(28px, 4vw, 56px) ${({ theme }) => theme.layout.gutter} 0;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: clamp(28px, 4vw, 48px);
-
-  @media (min-width: 900px) {
-    grid-template-columns: 1fr 1fr 1fr 1.2fr;
-  }
-`;
-
-const DropBody = styled.div`
-  max-width: ${({ theme }) => theme.layout.maxWidth};
-  margin: 0 auto;
-  padding: clamp(28px, 3.5vw, 44px) ${({ theme }) => theme.layout.gutter};
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1.2fr;
-  gap: clamp(24px, 3vw, 40px);
-`;
-
-const Cell = styled.div<{ $span?: number }>`
-  min-width: 0;
-  ${({ $span }) =>
-    $span &&
-    css`
-      @media (min-width: 900px) { grid-column: span ${$span}; }
-    `}
-`;
-
-const Col = styled.div`
-  h4 {
-    font-family: ${({ theme }) => theme.fonts.mono};
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: ${({ theme }) => theme.colors.mutedOnDark};
-    margin-bottom: 18px;
-  }
-  ul { display: grid; gap: 4px; }
-  a {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 0;
-    font-size: 16.5px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.85);
-    transition: color 0.15s ease, transform 0.15s ease;
-    &:hover { color: ${({ theme }) => theme.colors.orange}; transform: translateX(4px); }
-  }
-`;
-
-/* Column link inside the hamburger mega menu — stays highlighted while its
-   rail content is shown (cascading-menu effect from the reference). */
-const MegaLink = styled.a<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 0;
-  font-size: 16.5px;
-  font-weight: 500;
-  color: ${({ theme, $active }) => ($active ? theme.colors.orange : 'rgba(255, 255, 255, 0.85)')};
-  transform: ${({ $active }) => ($active ? 'translateX(4px)' : 'none')};
-  transition: color 0.15s ease, transform 0.15s ease;
-  &:hover { color: ${({ theme }) => theme.colors.orange}; transform: translateX(4px); }
-`;
-
-const Featured = styled.div`
-  border-left: 2px solid ${({ theme }) => theme.colors.orange};
-  padding-left: clamp(20px, 2.5vw, 32px);
-
-  h3 {
-    font-size: clamp(26px, 3vw, 34px);
-    font-weight: 600;
+  &:hover {
     color: #fff;
   }
-  p {
-    margin-top: 14px;
-    font-size: 15.5px;
-    line-height: 1.65;
-    color: ${({ theme }) => theme.colors.bodyOnDark};
-  }
-  a {
-    margin-top: 18px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14.5px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.orange};
-    &:hover { color: ${({ theme }) => theme.colors.orangeLight}; }
+  &:hover::after {
+    transform: scaleX(1);
   }
 `;
 
-const Banner = styled.div`
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  margin-top: clamp(28px, 4vw, 48px);
-  background: url('${megaMenu.banner.image}') center/cover;
-`;
-
-const BannerOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(90deg, rgba(4,30,40,0.88) 0%, rgba(6,44,59,0.55) 60%, rgba(6,44,59,0.35) 100%);
-`;
-
-const BannerInner = styled.div`
-  max-width: ${({ theme }) => theme.layout.maxWidth};
-  margin: 0 auto;
-  padding: clamp(24px, 3.5vw, 40px) ${({ theme }) => theme.layout.gutter};
+const Actions = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
+  align-items: center;
+  gap: clamp(10px, 1.4vw, 18px);
+  flex: none;
+  margin-left: auto;
+
+  @media (min-width: 1060px) {
+    margin-left: 0;
+  }
 `;
 
-const BannerCta = styled.a`
+const CtaButton = styled(Button)`
+  min-height: 42px;
+  padding: 0 20px;
+  font-size: 13.5px;
+
+  @media (max-width: 700px) {
+    display: none;
+  }
+`;
+
+const MenuButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 26px;
-  background: ${({ theme }) => theme.colors.orange};
+  height: 42px;
+  padding: 0 14px 0 16px;
+  border: 1px solid ${({ theme }) => theme.colors.lineOnDark};
+  border-radius: ${({ theme }) => theme.layout.radius};
   color: #fff;
   font-family: ${({ theme }) => theme.fonts.mono};
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  border-radius: ${({ theme }) => theme.layout.radius};
-  transition: background 0.18s ease, transform 0.18s ease;
-  &:hover { background: ${({ theme }) => theme.colors.orangeLight}; transform: translateY(-1px); }
-`;
-
-/* Hover-dropdown content pieces. */
-const Block = styled.div`
-  h5 {
-    font-size: 17px;
-    font-weight: 600;
-    color: #fff;
-  }
-  p {
-    margin-top: 10px;
-    font-size: 14.5px;
-    line-height: 1.6;
-    color: ${({ theme }) => theme.colors.bodyOnDark};
-  }
-`;
-
-const MiniCard = styled.a`
-  display: block;
-  border-radius: ${({ theme }) => theme.layout.radiusLg};
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid ${({ theme }) => theme.colors.borderOnDark};
-  transition: border-color 0.18s ease, transform 0.18s ease;
+  transition: border-color 0.25s ease, background 0.25s ease;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.orange};
-    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.06);
   }
+
+  span {
+    @media (max-width: 520px) {
+      display: none;
+    }
+  }
+`;
+
+/** Reading-progress hairline pinned to the bottom edge of the bar. */
+const Progress = styled(m.div)`
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: 100%;
+  transform-origin: left;
+  background: ${({ theme }) => theme.colors.orange};
+`;
+
+/* -------------------------------------------------------------- overlay -- */
+
+const wipeIn = keyframes`
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(0 0 0% 0); }
+`;
+
+const wipeOut = keyframes`
+  from { clip-path: inset(0 0 0% 0); }
+  to   { clip-path: inset(0 0 100% 0); }
+`;
+
+const itemIn = keyframes`
+  from { opacity: 0; transform: translate3d(0, 22px, 0); }
+  to   { opacity: 1; transform: none; }
+`;
+
+const Overlay = styled.div<{ $closing: boolean }>`
+  position: fixed;
+  inset: 0;
+  z-index: ${({ theme }) => theme.z.menu};
+  background: ${({ theme }) => theme.colors.navyDeep};
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: ${({ $closing }) => ($closing ? wipeOut : wipeIn)} 0.55s ${EASE_CSS} both;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+`;
+
+const OverlayTop = styled(Container)`
+  height: var(--nav-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 
   img {
-    width: 100%;
-    height: 128px;
-    object-fit: cover;
+    width: auto;
+    height: clamp(24px, 2.5vw, 34px);
+  }
+`;
+
+const OverlayBody = styled(Container)`
+  flex: 1;
+  display: grid;
+  gap: clamp(36px, 5vw, 64px);
+  align-content: center;
+  padding-block: clamp(32px, 6vw, 72px);
+
+  @media (min-width: 900px) {
+    grid-template-columns: 1.35fr 1fr;
+    align-items: start;
+    align-content: center;
+  }
+`;
+
+const MenuGroup = styled.div`
+  & + & {
+    margin-top: clamp(28px, 3vw, 44px);
+  }
+
+  h3 {
+    font-family: ${({ theme }) => theme.fonts.body};
+    font-size: clamp(13px, 0.3vw + 12px, 15px);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: ${({ theme }) => theme.colors.orangeOnDark};
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.lineOnDarkSoft};
+  }
+`;
+
+const BigLink = styled.a<{ $index: number }>`
+  animation: ${itemIn} 0.6s ${EASE_CSS} ${({ $index }) => 0.18 + $index * 0.045}s both;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: clamp(7px, 0.9vw, 11px) 0;
+  font-family: ${({ theme }) => theme.fonts.display};
+  font-size: clamp(25px, 4.4vw, 46px);
+  font-weight: 300;
+  letter-spacing: -0.004em;
+  line-height: 1.1;
+  color: rgba(255, 255, 255, 0.92);
+  transition: color 0.3s ease, transform 0.5s ${({ theme }) => theme.motion.ease};
+
+  i {
+    font-family: ${({ theme }) => theme.fonts.mono};
+    font-size: 11px;
+    font-style: normal;
+    letter-spacing: 0.1em;
+    color: ${({ theme }) => theme.colors.mutedOnDark};
+    transition: color 0.3s ease;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.orangeOnDark};
+    transform: translateX(10px);
+  }
+  &:hover i {
+    color: ${({ theme }) => theme.colors.orangeOnDark};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+`;
+
+const OverlayAside = styled.div`
+  animation: ${itemIn} 0.7s ${EASE_CSS} 0.34s both;
+  display: grid;
+  gap: 26px;
+  align-content: start;
+  padding-top: 6px;
+
+  @media (min-width: 900px) {
+    padding-left: clamp(24px, 3vw, 56px);
+    border-left: 1px solid ${({ theme }) => theme.colors.lineOnDarkSoft};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+`;
+
+const AsideBlock = styled.div`
+  h4 {
+    font-family: ${({ theme }) => theme.fonts.body};
+    font-size: clamp(13px, 0.3vw + 12px, 15px);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: ${({ theme }) => theme.colors.steel};
+    margin-bottom: 10px;
+  }
+  p,
+  a.val {
+    font-size: 15px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.82);
     display: block;
   }
-  .meta { padding: 16px 18px 18px; }
-  .row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    color: #fff;
-    font-size: 15.5px;
-    font-weight: 600;
-  }
-  .row svg {
-    flex-shrink: 0;
-    color: ${({ theme }) => theme.colors.orange};
-    transition: transform 0.18s ease;
-  }
-  &:hover .row svg { transform: translateX(4px); }
-  .sub {
-    margin-top: 6px;
-    font-size: 13px;
-    color: ${({ theme }) => theme.colors.mutedOnDark};
-  }
-  .txt {
-    margin-top: 8px;
-    font-size: 13.5px;
-    line-height: 1.55;
-    color: ${({ theme }) => theme.colors.bodyOnDark};
+  a.val:hover {
+    color: ${({ theme }) => theme.colors.orangeOnDark};
   }
 `;
 
-const InfoRows = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+/* ----------------------------------------------------------- component -- */
 
-  .k {
-    font-size: 11px;
-    font-family: ${({ theme }) => theme.fonts.mono};
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: ${({ theme }) => theme.colors.mutedOnDark};
-  }
-  .v {
-    margin-top: 4px;
-    font-size: 14.5px;
-    font-weight: 500;
-    color: #fff;
-  }
-`;
+const NAV_IDS = nav.links.map((l) => l.href.replace('#', ''));
 
-function Rail({ k }: { k: string }) {
-  const rail = navPanels[k].rail;
-  return (
-    <Featured>
-      <h3>{rail.heading}</h3>
-      <p>{rail.body}</p>
-      <a href={rail.link.href}>
-        {rail.link.label} <ArrowRight size={16} />
-      </a>
-    </Featured>
-  );
-}
-
-function DropContent({ k, close }: { k: string; close: () => void }) {
-  if (k === 'About') {
-    return (
-      <>
-        <Cell $span={2}>
-          <Block>
-            <h5>Who We Are</h5>
-            <p>{about.principle} {about.foundation}</p>
-          </Block>
-        </Cell>
-        <Cell $span={2}>
-          <Rail k={k} />
-        </Cell>
-      </>
-    );
-  }
-  if (k === 'Verticals') {
-    return (
-      <>
-        {services.items.map((s) => (
-          <Cell key={s.key}>
-            <Block>
-              <h5>{s.title}</h5>
-              <p>{s.text}</p>
-            </Block>
-          </Cell>
-        ))}
-      </>
-    );
-  }
-  if (k === 'Chartering') {
-    return (
-      <>
-        <Cell>
-          <Col>
-            <h4>{chartering.structuresHeading}</h4>
-            <ul>
-              {chartering.structures.map((s) => (
-                <li key={s}><a href="#chartering" onClick={close}>{s}</a></li>
-              ))}
-            </ul>
-          </Col>
-        </Cell>
-        <Cell>
-          <Col>
-            <h4>{chartering.cargoHeading}</h4>
-            <ul>
-              {chartering.cargo.map((c) => (
-                <li key={c}><a href="#chartering" onClick={close}>{c}</a></li>
-              ))}
-            </ul>
-          </Col>
-        </Cell>
-        <Cell $span={2}>
-          <Rail k={k} />
-        </Cell>
-      </>
-    );
-  }
-  if (k === 'Projects') {
-    return (
-      <>
-        {projects.items.map((p) => (
-          <Cell key={p.id}>
-            <MiniCard href={p.href} onClick={close}>
-              <img src={p.image} alt={p.title} loading="lazy" />
-              <span className="meta">
-                <span className="row">{p.title} <ArrowRight size={16} /></span>
-                <span className="sub">{p.category} · {p.location}</span>
-              </span>
-            </MiniCard>
-          </Cell>
-        ))}
-        <Cell $span={2}>
-          <Rail k={k} />
-        </Cell>
-      </>
-    );
-  }
-  if (k === 'Global Presence') {
-    return (
-      <>
-        <Cell $span={2}>
-          <Block>
-            <h5>{globalPresence.networkLabel}</h5>
-            <p>{globalPresence.body} {globalPresence.networkNote}.</p>
-          </Block>
-        </Cell>
-        <Cell $span={2}>
-          <Rail k={k} />
-        </Cell>
-      </>
-    );
-  }
-  // Contact
-  return (
-    <>
-      <Cell $span={2}>
-        <InfoRows>
-          {contact.info.map((it) => (
-            <div key={it.label}>
-              <div className="k">{it.label}</div>
-              <div className="v">{it.value}</div>
-            </div>
-          ))}
-        </InfoRows>
-      </Cell>
-      <Cell $span={2}>
-        <Rail k={k} />
-      </Cell>
-    </>
-  );
-}
+// Every top-level section is observed, not just the linked ones, so the
+// indicator clears when the visitor is in a section the bar doesn't list.
+const WATCHED_IDS = [
+  'home',
+  'statement',
+  'about',
+  'capabilities',
+  'model',
+  'chartering',
+  'projects',
+  'ambition',
+  'global',
+  'sustainability',
+  'leadership',
+  'contact',
+];
 
 export default function Navbar() {
   const [solid, setSolid] = useState(false);
   const [open, setOpen] = useState(false);
-  const [panel, setPanel] = useState<string | null>(null);
-  const [megaHover, setMegaHover] = useState<string | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The overlay stays mounted through its CSS wipe-out before unmounting.
+  const [closing, setClosing] = useState(false);
+  const [active, setActive] = useState<string>('');
+  const { scrollYProgress } = useScroll();
+  const progressScale = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
+  /* Solidify the bar once the hero is behind it. */
   useEffect(() => {
-    const onScroll = () => setSolid(window.scrollY > 24);
+    // Solidify early on short viewports so content never scrolls under a
+    // transparent bar for long.
+    const onScroll = () =>
+      setSolid(window.scrollY > Math.min(window.innerHeight * 0.16, 90));
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  /* Highlight the section currently occupying the middle of the viewport. */
   useEffect(() => {
-    if (!open && !panel) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setPanel(null);
-        setMegaHover(null);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, panel]);
+    const els = WATCHED_IDS.map((id) => document.getElementById(id)).filter(
+      (el): el is HTMLElement => Boolean(el)
+    );
+    if (!els.length) return;
 
-  useEffect(() => {
-    return () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current);
-    };
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          const { id } = e.target;
+          setActive(NAV_IDS.includes(id) ? id : '');
+        });
+      },
+      { rootMargin: '-45% 0px -50% 0px', threshold: 0 }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
   }, []);
 
-  // Lock page scroll + dim background while the hamburger menu is open.
+  /* Lock background scroll and wire Escape while the overlay is open. */
   useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : '';
-    return () => {
-      document.body.style.overflow = '';
+    if (!open) return;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
     };
-  }, [open ]);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
-  const cancelClose = () => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  };
+  const close = useCallback(() => {
+    setClosing(true);
+    window.setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, 450);
+  }, []);
 
-  const scheduleClose = () => {
-    cancelClose();
-    closeTimer.current = setTimeout(() => setPanel(null), CLOSE_DELAY);
-  };
-
-  const enterLink = (label: string) => {
-    if (open) return;
-    cancelClose();
-    setPanel(label in navPanels ? label : null);
-  };
-
-  const closeAll = () => {
-    cancelClose();
-    setOpen(false);
-    setPanel(null);
-    setMegaHover(null);
-  };
-
-  const toggleMenu = () => {
-    setMegaHover(null);
-    setOpen((v) => !v);
-  };
-
-  const dropOpen = panel !== null && !open;
-  const megaRail = (megaHover && megaRails[megaHover]) || megaMenu.featured;
+  const openMenu = useCallback(() => {
+    setClosing(false);
+    setOpen(true);
+  }, []);
 
   return (
-    <div onMouseLeave={scheduleClose}>
-      <Bar $solid={solid || open || dropOpen}>
-        <Inner>
-          <Left>
-            <Burger aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} onClick={toggleMenu}>
-              {open ? <Close /> : <Menu />}
-            </Burger>
-            <Word href="#home" aria-label={`${brand.name} home`}>
-              <Logo src="/images/incworx-logo-white.jpg" alt={brand.name} />
-            </Word>
-          </Left>
+    <>
+      <Bar $solid={solid || open}>
+        <Inner $wide>
+          <Brand href="#home" aria-label="INCWORX — home">
+            <Image
+              src="/images/incworx-logo-reversed.png"
+              alt="INCWORX"
+              width={1396}
+              height={195}
+              priority
+              sizes="260px"
+            />
+          </Brand>
 
-          <Links onMouseEnter={cancelClose}>
+          <Links aria-label="Primary">
             {nav.links.map((l) => (
               <NavLink
-                key={l.label}
+                key={l.href}
                 href={l.href}
-                $active={panel === l.label}
-                aria-expanded={l.label in navPanels ? panel === l.label : undefined}
-                onMouseEnter={() => enterLink(l.label)}
-                onClick={closeAll}
+                $active={active === l.href.replace('#', '')}
               >
                 {l.label}
               </NavLink>
             ))}
           </Links>
 
-          <Cta href={nav.cta.href}>{nav.cta.label}</Cta>
+          <Actions>
+            <CtaButton as="a" href={nav.cta.href} $variant="primary">
+              {nav.cta.label}
+              <ArrowRight size={16} />
+            </CtaButton>
+            <MenuButton
+              type="button"
+              onClick={openMenu}
+              aria-expanded={open}
+              aria-label="Open menu"
+            >
+              <span>Menu</span>
+              <Menu size={18} />
+            </MenuButton>
+          </Actions>
         </Inner>
+
+        <Progress style={{ scaleX: progressScale }} aria-hidden="true" />
       </Bar>
 
-      {/* Hover dropdown (desktop) — like the reference: panel follows the hovered link. */}
-      <DropPanel $open={dropOpen} aria-hidden={!dropOpen}>
-        <DropBody onMouseEnter={cancelClose}>
-          {panel && <DropContent k={panel} close={closeAll} />}
-        </DropBody>
-      </DropPanel>
+      {open && (
+        <Overlay role="dialog" aria-modal="true" aria-label="Site menu" $closing={closing}>
+            <OverlayTop $wide>
+              <Image
+                src="/images/incworx-logo-reversed.png"
+                alt="INCWORX"
+                width={1396}
+                height={195}
+                sizes="260px"
+              />
+              <MenuButton type="button" onClick={close} aria-label="Close menu">
+                <span>Close</span>
+                <Close size={18} />
+              </MenuButton>
+            </OverlayTop>
 
-      {/* Hamburger mega menu (all sizes). */}
-      <Backdrop $open={open} onClick={() => setOpen(false)} aria-hidden="true" />
-      <Panel $open={open} aria-hidden={!open}>
-        <PanelInner>
-          {megaMenu.columns.map((col) => (
-            <Col key={col.heading}>
-              <h4>{col.heading}</h4>
-              <ul>
-                {col.links.map((l) => (
-                  <li key={l.label}>
-                    <MegaLink
-                      href={l.href}
-                      $active={megaHover === l.label}
-                      onMouseEnter={() => setMegaHover(l.label)}
-                      onFocus={() => setMegaHover(l.label)}
-                      onClick={() => setOpen(false)}
-                      tabIndex={open ? 0 : -1}
-                    >
-                      {l.label}
-                    </MegaLink>
-                  </li>
+            <OverlayBody $wide>
+              <div>
+                {nav.menuGroups.map((group, gi) => (
+                  <MenuGroup key={group.heading}>
+                    <h3>{group.heading}</h3>
+                    {group.links.map((l, i) => (
+                      <BigLink
+                        key={l.href}
+                        href={l.href}
+                        onClick={close}
+                        $index={gi * group.links.length + i}
+                      >
+                        <i>{String(i + 1).padStart(2, '0')}</i>
+                        {l.label}
+                      </BigLink>
+                    ))}
+                  </MenuGroup>
                 ))}
-              </ul>
-            </Col>
-          ))}
+              </div>
 
-          <Featured key={megaRail.heading}>
-            <h3>{megaRail.heading}</h3>
-            <p>{megaRail.body}</p>
-            <a href={megaRail.link.href} onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}>
-              {megaRail.link.label} <ArrowRight size={16} />
-            </a>
-          </Featured>
-        </PanelInner>
-
-        <Banner>
-          <BannerOverlay />
-          <BannerInner>
-            {megaMenu.banner.ctas.map((c) => (
-              <BannerCta key={c.label} href={c.href} onClick={() => setOpen(false)} tabIndex={open ? 0 : -1}>
-                {c.label}
-              </BannerCta>
-            ))}
-          </BannerInner>
-        </Banner>
-      </Panel>
-    </div>
+              <OverlayAside>
+                  <AsideBlock>
+                    <h4>Global network</h4>
+                    <p>{hero.trust}</p>
+                  </AsideBlock>
+                  <AsideBlock>
+                    <h4>Enquiries</h4>
+                    <a className="val" href={`mailto:${contact.info[0].value}`}>
+                      {contact.info[0].value}
+                    </a>
+                    <a className="val" href={`tel:${contact.info[1].value.replace(/\s/g, '')}`}>
+                      {contact.info[1].value}
+                    </a>
+                  </AsideBlock>
+                  <AsideBlock>
+                    <h4>Head office</h4>
+                    <p>{contact.info[2].value}</p>
+                  </AsideBlock>
+                <Button as="a" href={nav.cta.href} onClick={close} $variant="primary">
+                  Start a conversation
+                  <ArrowRight size={16} />
+                </Button>
+              </OverlayAside>
+            </OverlayBody>
+        </Overlay>
+      )}
+    </>
   );
 }
