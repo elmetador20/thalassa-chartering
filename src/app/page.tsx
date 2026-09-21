@@ -28,7 +28,7 @@ export default function Home() {
         <AmbitionSection />
         <GlobalPresence />
         <SustainabilitySection />
-        <LeadershipSection />
+        {/* <LeadershipSection /> */}
         <ContactSection />
       </main>
       <Footer />
