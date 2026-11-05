@@ -276,7 +276,8 @@ update notice).
 | `prisma/migrations/` | Migration history — committed, applied in order |
 | `prisma.config.ts` | CLI config: env loading, migration connection, schema pinning |
 | `src/lib/server/db.ts` | The app's client (pooled connection, `server-only`) |
-| `src/lib/server/reports/` | Report queries, date-only helpers, R2 key minting |
+| `src/lib/server/reports/` | Report service (lifecycle, uploads, file links), queries, slugs, date-only helpers, storage keys |
+| `src/lib/server/storage/` | PDF storage: the `ReportStorage` interface and the Cloudflare R2 adapter |
 | `src/generated/prisma/` | Generated client — git-ignored, rebuilt by `postinstall` |
 
 ### The `incworx` schema
@@ -311,9 +312,12 @@ Lists order by `report_date`, then `created_at`, then `id`. Report date alone is
 not unique, and paginating over a non-unique order repeats or skips rows.
 
 Integrity rules the schema language cannot express are CHECK constraints in the
-migration: lower-case admin e-mail, URL-safe slugs, keys confined to `reports/`
-with no traversal, positive file size, and `published_at` required when
-published.
+migrations: lower-case admin e-mail, URL-safe slugs, keys confined to `reports/`
+with no traversal, positive file size, `published_at` required when published,
+and `archived_at` set exactly when a report is archived.
+
+`published_at` records the **first** publication and is never overwritten —
+archiving and restoring a report keeps it.
 
 ### Commands
 
@@ -378,7 +382,7 @@ Nobody can act on their own account.
 | CSRF | Next.js rejects server-action POSTs from another origin; the session cookie is `SameSite=Strict`. |
 | Authorization | `middleware.ts` is only a fast redirect for missing cookies. The boundary is `src/lib/server/auth/guards.ts`, called by every protected page and every server action; services re-check the permission themselves. |
 | Database rules | Enforced by Postgres, so they hold even for Prisma Studio or raw SQL: only approved accounts can be active; an Admin's approval records its approver; the approver must be a Super Admin and never the account itself; **the last active Super Admin can't be deactivated, demoted or deleted**; the audit log is append-only. |
-| Audit | `audit_logs`: admin created / approved / rejected / activated / deactivated, sign-in success and failure, sign-out, password change (report events are ready for the reports stage). Actor, target, time, IP, user agent and non-sensitive metadata — a writer-side filter drops anything that looks like a secret. |
+| Audit | `audit_logs`: admin created / approved / rejected / activated / deactivated, sign-in success and failure, sign-out, password change, and every report change (uploaded, edited, PDF replaced, published, archived, restored, deleted). Actor, target, time, IP, user agent and non-sensitive metadata — a writer-side filter drops anything that looks like a secret. |
 | Responses | `/admin` is `noindex`, can't be framed, and sends `Referrer-Policy: same-origin`. |
 
 Password reset by e-mail is **not** implemented: there is no e-mail delivery
@@ -388,7 +392,7 @@ the Super Admin and a new account created.
 ### First-time setup
 
 1. Add `DATABASE_URL` and `DIRECT_URL` to `.env` (see `.env.example`).
-2. `npm run db:deploy` — applies both migrations.
+2. `npm run db:deploy` — applies the pending migrations.
 3. `npm run db:seed` — creates the Super Admin. You are asked for name, e-mail
    and password (hidden). It does nothing if a Super Admin already exists, and
    never changes an existing account.
@@ -399,6 +403,95 @@ the Super Admin and a new account created.
 `npm test` starts a real, throwaway PostgreSQL (`embedded-postgres`), shaped
 like the Supabase project (API roles, existing data in `public`), applies the
 migrations with the real `prisma migrate deploy`, and runs unit and
-integration tests. `npm run test:e2e` additionally builds the app and runs HTTP
-tests against `next start`: redirects, cookie flags, CSRF, the no-JS sign-in
-form, response headers, and a scan of the browser bundle for secrets.
+integration tests. `npm run test:e2e` builds the app into `.next-e2e` (so a
+running `next dev` is never disturbed) and runs HTTP tests against `next
+start`: redirects, cookie flags, CSRF, the no-JS sign-in form, the report pages
+and endpoints, sitemap and robots, response headers, and a scan of the browser
+bundle for secrets. Tests never touch Supabase or R2: storage is an in-memory
+fake that exists only under `tests/`.
+
+## Reports
+
+Global, Domestic and Special PDF reports, managed under `/admin/reports` and
+published at `/reports`.
+
+### Lifecycle
+
+| From | Action | To | Who |
+| --- | --- | --- | --- |
+| — | upload: **Save as draft** / **Publish now** | DRAFT / PUBLISHED | Admin, Super Admin |
+| DRAFT | publish | PUBLISHED (first publication date set once) | Admin, Super Admin |
+| DRAFT or PUBLISHED | archive | ARCHIVED — off the website immediately | Admin, Super Admin |
+| ARCHIVED | restore | DRAFT (publish again when ready) | Admin, Super Admin |
+| any | **delete permanently** — type the exact title to confirm | — | Super Admin only |
+
+Editing details or replacing the PDF never changes the status or the web
+address. Several reports may share a title, category and date; each gets its
+own slug (`<title>-<date>-<random>`). Every change is audited, and each report's
+edit page shows its own history.
+
+### Uploads
+
+The PDF never passes through the web server:
+
+1. The browser checks the file (`.pdf`, PDF signature, ≤ 50 MB) and asks
+   `POST /api/admin/report-uploads` for a signed URL — valid 5 minutes, locked to
+   that exact size and type, under `pending/<admin-id>/<upload-id>.pdf`.
+2. The browser `PUT`s the file straight to R2, with a progress bar.
+3. Saving sends the details and the upload key to a server action, which checks
+   what actually arrived (owner, size, stored type, `%PDF-` signature), copies it
+   to `reports/<upload-id>.pdf`, writes the row and the audit entry in one
+   transaction, then removes the pending copy.
+
+A double submit creates one report (the upload id decides the final key, which
+is unique). If saving fails, the copy is removed and the upload is kept, so
+"try again" does not re-send the file. Upload URLs are rate-limited to 60 per
+admin per 10 minutes.
+
+### Public site
+
+`/reports` lists **published** reports only, filtered by category tab, title
+search, exact date, date range, month or year, sorted newest or oldest first,
+12 per page — all in the URL, so a view can be bookmarked or shared.
+`/reports/<slug>` shows the details, a lazy-loaded PDF.js preview (canvas only:
+no PDF links, forms or scripts are active) and a download button. Drafts,
+archived reports and unknown addresses are the same 404. `/sitemap.xml` lists
+published reports; `/admin` and `/api/` are excluded from indexing.
+
+PDF links are short-lived signed URLs issued per request (preview 10 minutes,
+download 5 minutes) by `GET /api/reports/<slug>/file` and, for admins (any
+status), `GET /api/admin/reports/<id>/file`. The bucket itself is never public.
+
+### Connecting Cloudflare R2
+
+Until the four `R2_*` values in `.env` are real, the site runs normally and
+every file operation says "PDF storage is not connected yet". To connect it:
+
+1. Create a **private** bucket. Do not enable public access or `r2.dev`.
+2. Create an R2 API token with **Object Read & Write**, restricted to that
+   bucket. Put the account ID, access key ID, secret and bucket name in `.env`
+   (see `.env.example`) — server-side only, never `NEXT_PUBLIC_`.
+3. Bucket → Settings → **CORS policy** (the browser uploads to, and the
+   preview reads from, R2 directly):
+
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://incworx.in"],
+       "AllowedMethods": ["GET", "PUT", "HEAD"],
+       "AllowedHeaders": ["content-type", "range"],
+       "ExposeHeaders": ["content-length", "content-range", "accept-ranges", "etag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+
+   Add `http://localhost:3000` for local development if needed.
+4. Bucket → Settings → **Object lifecycle rules**: delete objects with prefix
+   `pending/` after **1 day**. This clears uploads that were started but never
+   saved.
+5. Restart the app, upload one test report, preview, download, then delete it.
+
+If a file ever cannot be removed (R2 briefly unreachable), the report change
+still completes and the admin is told; the file's key is kept in the
+`REPORT_DELETED` / `REPORT_FILE_REPLACED` audit entry for clean-up.

@@ -30,6 +30,11 @@ export const LOGIN_RATE_LIMITS = {
 /** Current-password checks when changing a password, per account. */
 export const PASSWORD_CHANGE_RATE_LIMIT = { max: 5, windowMs: 15 * MINUTE } as const;
 
+/** Upload URLs issued, per admin. Generous enough for a day of back-filling
+ *  historical reports one after another; stops a stolen session flooding
+ *  the bucket. Every issued URL counts, not only failures. */
+export const REPORT_UPLOAD_RATE_LIMIT = { max: 60, windowMs: 10 * MINUTE } as const;
+
 const RETENTION_MS = 24 * 60 * MINUTE;
 
 const hashKey = (key: string) => createHash('sha256').update(key, 'utf8').digest('hex');
@@ -68,6 +73,17 @@ export async function recordFailure(rules: RateLimitRule[], now: Date = new Date
   });
   // Opportunistic pruning keeps the table small without a scheduled job.
   await db.authAttempt.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - RETENTION_MS) } } });
+}
+
+/**
+ * Count-every-use limiter (e.g. upload URLs): refuses once the window is
+ * full, otherwise records this use. Shares the attempts table with the
+ * failure counters, under a distinct key prefix.
+ */
+export async function consumeRateLimit(rule: RateLimitRule, now: Date = new Date()): Promise<RateLimitStatus> {
+  const status = await checkRateLimit([rule], now);
+  if (!status.limited) await recordFailure([rule], now);
+  return status;
 }
 
 /** A successful sign-in forgives that account's earlier failures (the

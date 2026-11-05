@@ -7,6 +7,7 @@ import { m, EASE_CSS, useScroll, useTransform } from '@/lib/motion';
 import { Container, Button } from './ui';
 import { ArrowRight, Close, Menu } from './icons';
 import { nav, hero, contact } from '@/data/siteData';
+import { useSiteLinks } from '@/lib/site-links';
 
 /* ------------------------------------------------------------------ bar -- */
 
@@ -351,6 +352,7 @@ const WATCHED_IDS = [
 ];
 
 export default function Navbar() {
+  const { pathname, onHome, href } = useSiteLinks();
   const [solid, setSolid] = useState(false);
   const [open, setOpen] = useState(false);
   // The overlay stays mounted through its CSS wipe-out before unmounting.
@@ -421,9 +423,9 @@ export default function Navbar() {
 
   return (
     <>
-      <Bar $solid={solid || open}>
+      <Bar $solid={solid || open || !onHome}>
         <Inner $wide>
-          <Brand href="#home" aria-label="INCWORX — home">
+          <Brand href={href('#home')} aria-label="INCWORX — home">
             <Image
               src="/images/incworx-logo-reversed.png"
               alt="INCWORX"
@@ -438,8 +440,9 @@ export default function Navbar() {
             {nav.links.map((l) => (
               <NavLink
                 key={l.href}
-                href={l.href}
-                $active={active === l.href.replace('#', '')}
+                href={href(l.href)}
+                $active={l.href.startsWith('/') ? pathname.startsWith(l.href) : onHome && active === l.href.replace('#', '')}
+                aria-current={l.href.startsWith('/') && pathname.startsWith(l.href) ? 'page' : undefined}
               >
                 {l.label}
               </NavLink>
@@ -447,7 +450,7 @@ export default function Navbar() {
           </Links>
 
           <Actions>
-            <CtaButton as="a" href={nav.cta.href} $variant="primary">
+            <CtaButton as="a" href={href(nav.cta.href)} $variant="primary">
               {nav.cta.label}
               <ArrowRight size={16} />
             </CtaButton>
@@ -490,7 +493,7 @@ export default function Navbar() {
                     {group.links.map((l, i) => (
                       <BigLink
                         key={l.href}
-                        href={l.href}
+                        href={href(l.href)}
                         onClick={close}
                         $index={gi * group.links.length + i}
                       >
@@ -520,7 +523,7 @@ export default function Navbar() {
                     <h4>Head office</h4>
                     <p>{contact.info[2].value}</p>
                   </AsideBlock>
-                <Button as="a" href={nav.cta.href} onClick={close} $variant="primary">
+                <Button as="a" href={href(nav.cta.href)} onClick={close} $variant="primary">
                   Start a conversation
                   <ArrowRight size={16} />
                 </Button>

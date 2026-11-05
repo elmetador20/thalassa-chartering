@@ -88,6 +88,7 @@ enum AuditAction {
   REPORT_FILE_REPLACED
   REPORT_PUBLISHED
   REPORT_ARCHIVED
+  REPORT_RESTORED
   REPORT_DELETED
 
   @@map("audit_action")
@@ -227,8 +228,13 @@ model Report {
 
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
-  /// Set when first published. Required whenever status = PUBLISHED (CHECK).
+  /// Set on FIRST publication and never overwritten afterwards: archiving,
+  /// restoring and publishing again keep the original date. Required whenever
+  /// status = PUBLISHED (CHECK).
   publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+  /// When the report was archived. Set exactly while status = ARCHIVED, cleared
+  /// on restore (CHECK).
+  archivedAt  DateTime? @map("archived_at") @db.Timestamptz(3)
 
   createdById String    @map("created_by_id") @db.Uuid
   /// RESTRICT: an admin who has uploaded reports cannot be hard-deleted —

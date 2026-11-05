@@ -16,6 +16,7 @@ export const nav = {
     { label: 'Chartering', href: '#chartering' },
     { label: 'Projects', href: '#projects' },
     { label: 'Global Presence', href: '#global' },
+    { label: 'Reports', href: '/reports' },
   ],
   cta: { label: 'Contact', href: '#contact' },
   // Full-screen overlay menu — every section, grouped.
@@ -40,6 +41,7 @@ export const nav = {
         { label: 'Digitronics', href: '#digitronics' },
         { label: 'Chartering', href: '#chartering' },
         { label: 'Projects', href: '#projects' },
+        { label: 'Reports', href: '/reports' },
       ],
     },
   ],
@@ -433,7 +435,7 @@ export const footer = {
   columns: [
     {
       heading: 'Navigation',
-      links: ['About', 'Verticals', 'Model', 'Chartering', 'Projects', 'Contact'],
+      links: ['About', 'Verticals', 'Model', 'Chartering', 'Projects', 'Reports', 'Contact'],
     },
     {
       heading: 'Divisions',

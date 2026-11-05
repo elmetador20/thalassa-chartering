@@ -348,6 +348,7 @@ export type BadgeTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info';
 
 const BadgeBox = styled.span<{ $tone: BadgeTone }>`
   display: inline-flex;
+  justify-self: start; /* never stretch inside the stacked mobile table */
   align-items: center;
   gap: 6px;
   padding: 3px 8px;
@@ -552,4 +553,22 @@ export const EmptyState = styled.div`
   text-align: center;
   font-size: 15px;
   color: ${({ theme }) => theme.colors.mutedOnLight};
+`;
+
+/** Read by screen readers, invisible on screen. */
+export const VisuallyHidden = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+`;
+
+export const Select = styled.select<{ $invalid?: boolean }>`
+  ${inputStyles}
+  appearance: auto;
 `;

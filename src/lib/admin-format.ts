@@ -3,6 +3,7 @@
 // server and client render different text and break hydration.
 
 import type { AuditAction } from '@/generated/prisma/enums';
+import { CATEGORY_LABELS as REPORT_CATEGORY_LABELS } from '@/lib/reports/constants';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const IST_OFFSET_MS = 330 * 60 * 1000; // UTC+5:30, no daylight saving
@@ -23,11 +24,8 @@ export function formatCalendarDate(ymd: string): string {
   return month ? `${d} ${month} ${y}` : ymd;
 }
 
-export const CATEGORY_LABELS: Record<string, string> = {
-  GLOBAL: 'Global',
-  DOMESTIC: 'Domestic',
-  SPECIAL: 'Special',
-};
+/** Keyed by plain string so it accepts values straight from the database. */
+export const CATEGORY_LABELS: Record<string, string> = { ...REPORT_CATEGORY_LABELS };
 
 const LOGIN_FAILURE_LABELS: Record<string, string> = {
   invalid_credentials: 'wrong email or password',
@@ -81,6 +79,8 @@ export function describeActivity(item: ActivityLike): string {
       return `${who} published ${whom}`;
     case 'REPORT_ARCHIVED':
       return `${who} archived ${whom}`;
+    case 'REPORT_RESTORED':
+      return `${who} restored ${whom} to draft`;
     case 'REPORT_DELETED':
       return `${who} deleted ${whom}`;
     default:

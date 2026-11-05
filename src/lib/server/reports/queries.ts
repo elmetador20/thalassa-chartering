@@ -47,6 +47,7 @@ export interface ReportListItem {
   mimeType: string;
   /** ISO 8601 */
   publishedAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: { id: string; name: string };
@@ -74,6 +75,7 @@ const listSelect = {
   fileSize: true,
   mimeType: true,
   publishedAt: true,
+  archivedAt: true,
   createdAt: true,
   updatedAt: true,
   createdBy: { select: { id: true, name: true } },
@@ -94,6 +96,7 @@ function toListItem(row: ListRow): ReportListItem {
     fileSize: row.fileSize,
     mimeType: row.mimeType,
     publishedAt: row.publishedAt?.toISOString() ?? null,
+    archivedAt: row.archivedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     createdBy: row.createdBy,
@@ -179,4 +182,32 @@ export async function listReports(params: ListReportsParams = {}): Promise<Page<
 /** Published reports only — the only list the public site may use. */
 export function listPublishedReports(params: Omit<ListReportsParams, 'status'> = {}) {
   return listReports({ ...params, status: 'PUBLISHED' });
+}
+
+const SLUG_SHAPE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * A single PUBLISHED report by its public slug, or null. Drafts and archived
+ * reports are indistinguishable from reports that do not exist.
+ */
+export async function getPublishedReportBySlug(slug: string): Promise<ReportListItem | null> {
+  if (!SLUG_SHAPE.test(slug) || slug.length > 160) return null;
+  const row = await getDb().report.findFirst({ where: { slug, status: 'PUBLISHED' }, select: listSelect });
+  return row ? toListItem(row) : null;
+}
+
+/** Any status, by id — callers in the admin area check permissions first. */
+export async function getReportById(id: string): Promise<ReportListItem | null> {
+  if (!/^[0-9a-f-]{36}$/.test(id)) return null;
+  const row = await getDb().report.findUnique({ where: { id }, select: listSelect });
+  return row ? toListItem(row) : null;
+}
+
+/** Slugs and last-modified times of every published report, for the sitemap. */
+export async function listPublishedReportSlugs(): Promise<{ slug: string; updatedAt: Date }[]> {
+  return getDb().report.findMany({
+    where: { status: 'PUBLISHED' },
+    orderBy: [{ reportDate: 'desc' }, { id: 'desc' }],
+    select: { slug: true, updatedAt: true },
+  });
 }

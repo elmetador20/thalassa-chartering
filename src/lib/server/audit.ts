@@ -71,12 +71,18 @@ export interface ActivityItem {
 
 /**
  * Most recent events, newest first. `actorId` limits the feed to one person's
- * own actions — what an ADMIN sees; a SUPER_ADMIN sees everyone's.
+ * own actions — what an ADMIN sees; a SUPER_ADMIN sees everyone's. `target`
+ * limits it to one record — a report's history on its edit page.
  */
-export async function listRecentActivity(options: { limit?: number; actorId?: string } = {}): Promise<ActivityItem[]> {
+export async function listRecentActivity(
+  options: { limit?: number; actorId?: string; target?: { type: AuditTargetType; id: string } } = {},
+): Promise<ActivityItem[]> {
   const db = getDb();
   const rows = await db.auditLog.findMany({
-    where: options.actorId ? { actorId: options.actorId } : undefined,
+    where: {
+      ...(options.actorId ? { actorId: options.actorId } : {}),
+      ...(options.target ? { targetType: options.target.type, targetId: options.target.id } : {}),
+    },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: Math.min(Math.max(options.limit ?? 10, 1), 50),
     select: {
@@ -90,26 +96,30 @@ export async function listRecentActivity(options: { limit?: number; actorId?: st
     },
   });
 
-  // Resolve admin targets to names in one query.
-  const adminIds = [...new Set(rows.filter((r) => r.targetType === 'admin_user' && r.targetId).map((r) => r.targetId!))];
-  const admins = adminIds.length
-    ? await db.adminUser.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true } })
-    : [];
-  const adminNames = new Map(admins.map((a) => [a.id, a.name]));
+  // Resolve targets to names in one query per kind. A deleted report keeps its
+  // title in the audit metadata, so its history still reads sensibly.
+  const idsOf = (type: AuditTargetType) => [...new Set(rows.filter((r) => r.targetType === type && r.targetId).map((r) => r.targetId!))];
+  const adminIds = idsOf('admin_user');
+  const reportIds = idsOf('report');
+  const [admins, reports] = await Promise.all([
+    adminIds.length ? db.adminUser.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true } }) : [],
+    reportIds.length ? db.report.findMany({ where: { id: { in: reportIds } }, select: { id: true, title: true } }) : [],
+  ]);
+  const labels = new Map<string, string>([...admins.map((a) => [a.id, a.name] as const), ...reports.map((r) => [r.id, r.title] as const)]);
 
-  return rows.map((row) => ({
-    id: row.id,
-    action: row.action,
-    createdAt: row.createdAt.toISOString(),
-    actor: row.actor,
-    target:
-      row.targetType && row.targetId
-        ? {
-            type: row.targetType,
-            id: row.targetId,
-            label: row.targetType === 'admin_user' ? adminNames.get(row.targetId) ?? null : null,
-          }
-        : null,
-    metadata: (row.metadata ?? {}) as AuditMetadata,
-  }));
+  return rows.map((row) => {
+    const metadata = (row.metadata ?? {}) as AuditMetadata;
+    const fallback = typeof metadata.title === 'string' ? metadata.title : null;
+    return {
+      id: row.id,
+      action: row.action,
+      createdAt: row.createdAt.toISOString(),
+      actor: row.actor,
+      target:
+        row.targetType && row.targetId
+          ? { type: row.targetType, id: row.targetId, label: labels.get(row.targetId) ?? fallback }
+          : null,
+      metadata,
+    };
+  });
 }

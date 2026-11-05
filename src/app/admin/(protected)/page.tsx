@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import ActivityFeed from '@/components/admin/ActivityFeed';
+import { LinkButton } from '@/components/admin/LinkButton';
 import ReportsTable from '@/components/admin/ReportsTable';
 import { Columns, Panel, PanelHeader, PanelTitle, PageHeader, Stack, Stat, StatGrid } from '@/components/admin/ui';
 import { can } from '@/lib/auth/permissions';
@@ -28,7 +29,11 @@ export default async function DashboardPage() {
 
   return (
     <Stack $gap={24}>
-      <PageHeader eyebrow="Dashboard" title={`Welcome, ${admin.name.split(' ')[0]}`} />
+      <PageHeader
+        eyebrow="Dashboard"
+        title={`Welcome, ${admin.name.split(' ')[0]}`}
+        actions={can(admin.role, 'reports:create') ? <LinkButton href="/admin/reports/new">Upload report</LinkButton> : undefined}
+      />
 
       {adminCounts && (
         <Panel aria-labelledby="admins-heading">
