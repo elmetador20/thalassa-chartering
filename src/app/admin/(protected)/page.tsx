@@ -32,7 +32,16 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Dashboard"
         title={`Welcome, ${admin.name.split(' ')[0]}`}
-        actions={can(admin.role, 'reports:create') ? <LinkButton href="/admin/reports/new">Upload report</LinkButton> : undefined}
+        actions={
+          can(admin.role, 'reports:create') ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              <LinkButton href="/admin/reports/bulk-import" $variant="secondary">
+                Bulk CSV import
+              </LinkButton>
+              <LinkButton href="/admin/reports/new">Upload report</LinkButton>
+            </div>
+          ) : undefined
+        }
       />
 
       {adminCounts && (

@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import styled, { css } from 'styled-components';
 import { formatCalendarDate } from '@/lib/admin-format';
-import { CATEGORY_LABELS, formatFileSize, REPORT_CATEGORIES, type ReportCategoryValue } from '@/lib/reports/constants';
+import { CATEGORY_DESCRIPTIONS, CATEGORY_LABELS, formatFileSize, REPORT_CATEGORIES, type ReportCategoryValue } from '@/lib/reports/constants';
 import { toQueryString, type PublicReportQuery } from '@/lib/reports/filters';
 import { ArrowRight } from '../icons';
 import { Container, Lede, SectionLabel } from '../ui';
@@ -111,7 +111,7 @@ const Tab = styled(Link)<{ $active: boolean }>`
 export function CategoryTabs({ query }: { query: PublicReportQuery }) {
   const tabs: { label: string; value: ReportCategoryValue | null }[] = [
     { label: 'All reports', value: null },
-    ...REPORT_CATEGORIES.map((c) => ({ label: CATEGORY_LABELS[c], value: c })),
+    ...REPORT_CATEGORIES.map((c) => ({ label: `${CATEGORY_LABELS[c]} Reports`, value: c })),
   ];
   return (
     <Tabs aria-label="Report categories">
@@ -130,6 +130,106 @@ export function CategoryTabs({ query }: { query: PublicReportQuery }) {
         );
       })}
     </Tabs>
+  );
+}
+
+// ------------------------------------------------------------- categories --
+
+const Overview = styled.ul`
+  display: grid;
+  gap: 1px;
+  margin-bottom: clamp(24px, 3vw, 36px);
+  background: ${({ theme }) => theme.colors.lineOnLight};
+  border: 1px solid ${({ theme }) => theme.colors.lineOnLight};
+  @media (min-width: 860px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: clamp(18px, 2.4vw, 28px);
+    background: #fff;
+  }
+  h2 {
+    font-size: clamp(19px, 0.6vw + 16px, 23px);
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.textOnLight};
+  }
+  p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: ${({ theme }) => theme.colors.bodyOnLight};
+  }
+  .foot {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 6px;
+    font-size: 13.5px;
+    color: ${({ theme }) => theme.colors.mutedOnLight};
+  }
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.navy};
+  }
+`;
+
+/** The three categories side by side, each with its published count. */
+export function CategoryOverview({ counts }: { counts: Record<ReportCategoryValue, number> }) {
+  return (
+    <Overview aria-label="Report categories">
+      {REPORT_CATEGORIES.map((c) => (
+        <li key={c}>
+          <SectionLabel $onDark={false}>{CATEGORY_LABELS[c]}</SectionLabel>
+          <h2>{CATEGORY_LABELS[c]} Reports</h2>
+          <p>{CATEGORY_DESCRIPTIONS[c]}</p>
+          <div className="foot">
+            <span>
+              {counts[c]} report{counts[c] === 1 ? '' : 's'}
+            </span>
+            <Link href={`/reports?category=${c.toLowerCase()}`}>
+              View {CATEGORY_LABELS[c].toLowerCase()} reports <ArrowRight size={15} />
+            </Link>
+          </div>
+        </li>
+      ))}
+    </Overview>
+  );
+}
+
+const Intro = styled.div`
+  margin-bottom: clamp(20px, 3vw, 28px);
+  h2 {
+    font-size: clamp(22px, 1vw + 16px, 30px);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.textOnLight};
+  }
+  p {
+    margin-top: 8px;
+    max-width: 64ch;
+    font-size: 15.5px;
+    line-height: 1.6;
+    color: ${({ theme }) => theme.colors.bodyOnLight};
+  }
+`;
+
+/** Heading + description for the selected category. */
+export function CategoryIntro({ category, count }: { category: ReportCategoryValue; count: number }) {
+  return (
+    <Intro>
+      <h2>{CATEGORY_LABELS[category]} Reports</h2>
+      <p>
+        {CATEGORY_DESCRIPTIONS[category]} {count} published report{count === 1 ? '' : 's'}.
+      </p>
+    </Intro>
   );
 }
 
@@ -255,8 +355,13 @@ export function ReportList({ items }: { items: PublicReportItem[] }) {
           </EntryTitle>
           {r.description && <EntryText>{r.description}</EntryText>}
           <EntryFoot>
-            <span>PDF · {formatFileSize(r.fileSize)}</span>
-            <Link href={`/reports/${r.slug}`} aria-label={`Read ${r.title}`}>
+            <span>
+              PDF · {formatFileSize(r.fileSize)} ·{' '}
+              <a href={`/api/reports/${r.slug}/file`} rel="nofollow" className="download" aria-label={`Download ${r.title} (PDF)`}>
+                Download
+              </a>
+            </span>
+            <Link href={`/reports/${r.slug}`} aria-label={`Preview and read ${r.title}`}>
               Read report <ArrowRight size={15} />
             </Link>
           </EntryFoot>

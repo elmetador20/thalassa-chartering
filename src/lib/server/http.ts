@@ -83,6 +83,29 @@ export async function readJsonBody(request: NextRequest, maxBytes = 4096): Promi
   }
 }
 
+/**
+ * The common shape of an admin JSON POST: same-origin check → signed-in admin
+ * (re-validated against the database) → bounded JSON body → handler. Expected
+ * refusals map to their status codes; anything else is a generic 500.
+ */
+export async function adminJsonPost(
+  request: NextRequest,
+  context: string,
+  run: (session: AuthContext, body: unknown) => Promise<unknown>,
+  options: { maxBytes?: number; status?: number } = {},
+): Promise<NextResponse> {
+  if (!isSameOrigin(request)) return jsonError(403, 'forbidden_origin', 'Cross-site requests are not allowed.');
+  const session = await routeSession(request);
+  if (!session) return jsonError(401, 'unauthenticated', 'Your session has ended. Sign in again.');
+  const body = await readJsonBody(request, options.maxBytes);
+  if (body === null) return jsonError(400, 'bad_request', 'Send the request as JSON.');
+  try {
+    return jsonOk(await run(session, body), options.status ?? 200);
+  } catch (error) {
+    return errorResponse(error, context);
+  }
+}
+
 /** Maps the expected refusals to their status; anything else is logged
  *  safely and answered with a generic 500 that reveals nothing. */
 export function errorResponse(error: unknown, context: string): NextResponse {

@@ -13,7 +13,7 @@ import { toFieldErrors } from '@/lib/validation/auth';
 import { createReportSchema, replaceFileSchema, reportDetailsSchema, reportIdSchema, uploadRequestSchema } from '@/lib/validation/reports';
 import { recordAudit, type RequestMeta } from '../audit';
 import { ForbiddenError } from '../auth/errors';
-import { consumeRateLimit, REPORT_UPLOAD_RATE_LIMIT } from '../auth/rate-limit';
+import { consumeRateLimit, REPORT_UPLOAD_RATE_LIMIT, type RateLimitRule } from '../auth/rate-limit';
 import type { AuthContext } from '../auth/session';
 import { getDb, type DbTx } from '../db';
 import { describeErrorSafely } from '../safe-error';
@@ -51,6 +51,8 @@ export interface ReportServiceOptions {
   storage?: ReportStorage;
   request?: RequestMeta | null;
   now?: Date;
+  /** Added to the creation audit entry, e.g. { via: 'bulk-import', csvRow: 12 }. */
+  auditContext?: Record<string, string | number>;
 }
 
 function assertPermission(ctx: AuthContext, permission: Permission): void {
@@ -119,19 +121,27 @@ export async function requestReportUpload(ctx: AuthContext, raw: unknown, option
   const parsed = uploadRequestSchema.safeParse(raw);
   if (!parsed.success) throw new ReportError('validation', 'This file cannot be uploaded.', toFieldErrors(parsed.error));
 
-  const storage = storageOf(options);
+  const { key } = newPendingUploadKey(ctx.admin.id);
+  return issueUpload(storageOf(options), key, parsed.data.size, { key: `report-upload:${ctx.admin.id}`, ...REPORT_UPLOAD_RATE_LIMIT }, options.now);
+}
+
+/**
+ * Signs a PUT for `key`, locked to `size` bytes of application/pdf. Shared by
+ * single uploads and bulk imports (each with its own rate limit). Callers have
+ * already checked permission and validated the request.
+ */
+export async function issueUpload(storage: ReportStorage, key: string, size: number, rule: RateLimitRule, now?: Date): Promise<IssuedUpload> {
   // Don't spend a rate-limit slot on an upload that cannot happen.
   if (storage.kind === 'unconfigured') throw new ReportError('storage_unavailable', STORAGE_UNAVAILABLE_MESSAGE);
 
-  const limit = await consumeRateLimit({ key: `report-upload:${ctx.admin.id}`, ...REPORT_UPLOAD_RATE_LIMIT }, options.now);
+  const limit = await consumeRateLimit(rule, now);
   if (limit.limited) {
     const minutes = Math.max(1, Math.ceil(limit.retryAfterMs / 60000));
     throw new ReportError('rate_limited', `Too many uploads started. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
   }
 
-  const { key } = newPendingUploadKey(ctx.admin.id);
   const upload = await withStorage(() =>
-    storage.createUploadUrl({ key, contentType: PDF_MIME_TYPE, contentLength: parsed.data.size, expiresInSeconds: UPLOAD_URL_TTL_SECONDS }),
+    storage.createUploadUrl({ key, contentType: PDF_MIME_TYPE, contentLength: size, expiresInSeconds: UPLOAD_URL_TTL_SECONDS }),
   );
   return { uploadKey: key, url: upload.url, method: upload.method, headers: upload.headers, expiresAt: upload.expiresAt.toISOString(), maxBytes: MAX_PDF_BYTES };
 }
@@ -222,7 +232,15 @@ export async function createReport(ctx: AuthContext, raw: unknown, options: Repo
       await recordAudit(tx, {
         action: 'REPORT_UPLOADED',
         ...target,
-        metadata: { title: input.title, category: input.category, reportDate: input.reportDate, fileName, fileSize: size, status: report.status },
+        metadata: {
+          ...options.auditContext,
+          title: input.title,
+          category: input.category,
+          reportDate: input.reportDate,
+          fileName,
+          fileSize: size,
+          status: report.status,
+        },
       });
       if (publish) await recordAudit(tx, { action: 'REPORT_PUBLISHED', ...target, metadata: { title: input.title, firstPublication: true } });
       return report;

@@ -15,6 +15,13 @@ export const CATEGORY_LABELS: Record<ReportCategoryValue, string> = {
   SPECIAL: 'Special',
 };
 
+/** What each category covers — shown on the public reports page. */
+export const CATEGORY_DESCRIPTIONS: Record<ReportCategoryValue, string> = {
+  GLOBAL: 'International markets, global trade, shipping and industry reports.',
+  DOMESTIC: 'Indian markets, domestic trade and industry reports.',
+  SPECIAL: 'Special research, thematic reports and exclusive publications.',
+};
+
 export const STATUS_LABELS: Record<ReportStatusValue, string> = {
   DRAFT: 'Draft',
   PUBLISHED: 'Published',

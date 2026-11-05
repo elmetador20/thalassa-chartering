@@ -1,5 +1,5 @@
 import 'server-only';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 // ============================================================================
 // R2 object keys. Built from random UUIDs only — never the title, report date
@@ -31,6 +31,21 @@ export function newReportFileKey(): string {
 /** A pending key bound to the admin who requested the upload. */
 export function newPendingUploadKey(adminId: string): { key: string; uploadId: string } {
   const uploadId = randomUUID();
+  return { key: `${PENDING_UPLOAD_PREFIX}${adminId}/${uploadId}.pdf`, uploadId };
+}
+
+/**
+ * Bulk import: the upload id is derived from WHAT is being imported (this
+ * admin + title, category, date, file name and size) instead of being random.
+ * Importing the same row again — a retried batch, a reloaded page, the same
+ * CSV run twice — lands on the same permanent key, which the unique index lets
+ * only one report hold. Still a UUID-shaped hex id (version 8, "custom"), so
+ * no user text ever reaches a storage path.
+ */
+export function importUploadKey(adminId: string, fingerprint: string): { key: string; uploadId: string } {
+  const hex = createHash('sha256').update(`report-import:v1:${adminId}:${fingerprint}`, 'utf8').digest('hex');
+  const variant = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  const uploadId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
   return { key: `${PENDING_UPLOAD_PREFIX}${adminId}/${uploadId}.pdf`, uploadId };
 }
 

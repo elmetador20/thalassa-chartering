@@ -448,6 +448,58 @@ is unique). If saving fails, the copy is removed and the upload is kept, so
 "try again" does not re-send the file. Upload URLs are rate-limited to 60 per
 admin per 10 minutes.
 
+### Bulk import (historical reports)
+
+`/admin/reports/bulk-import` (Admin and Super Admin) takes one CSV plus the
+PDFs it names — drag them in together, or choose a folder.
+
+| Column | Required | Format |
+| --- | :---: | --- |
+| `title` | ✓ | up to 300 characters |
+| `category` | ✓ | `Global`, `Domestic` or `Special` (any case) |
+| `reportDate` | ✓ | `YYYY-MM-DD`, 2000-01-01 to today — independent of the upload date |
+| `description` | | up to 2,000 characters |
+| `fileName` | ✓ | the PDF's **exact** file name — files are matched by name, never by order |
+| `status` | ✓ | `Draft` or `Published` |
+
+The page offers the template as a download. Up to 1,000 rows per import.
+
+1. **Review** — every row is checked in the browser and again on the server:
+   missing / malformed fields, invalid category or date, missing PDF, the
+   same file name twice, non-PDF or invalid PDF, over 50 MB. Errors are shown
+   beside each row and can be downloaded as a CSV. Rows that match an existing
+   report (same title and date) are flagged as possible duplicates and
+   skipped unless "Import anyway" is ticked. Nothing is written yet.
+2. **Import** — valid rows upload a few at a time (`REPORT_IMPORT_BATCH_SIZE`,
+   default 3), each through the same path as a single upload: signed PUT →
+   server verifies the bytes → permanent key → report row + audit entry
+   (`via: bulk-import`, with the CSV row number). A report is only created
+   once its PDF is stored and verified.
+3. **Results** — imported / failed / skipped / duplicate warnings, a
+   downloadable error CSV, and "Retry failed rows".
+
+Re-running the same rows (a retried batch, a reloaded page, the same CSV
+again) never creates a second copy: each row's storage key is derived from
+the row (admin, title, category, date, file name, size), and the unique file
+key lets only one report hold it. Existing reports are never changed. Bulk
+uploads have their own rate limit (1,200 per admin per hour). Without R2
+configured the review step still works; importing explains that storage must
+be connected first.
+
+### Storage reconciliation
+
+```bash
+npm run storage:reconcile                          # dry run: report only
+npm run storage:reconcile -- --delete-stale-uploads
+```
+
+Lists report files in R2 that no report references, reports whose PDF is
+missing, and temporary `pending/` uploads older than 24 hours. Nothing is
+changed unless `--delete-stale-uploads` is given, and even then only those
+stale temporary uploads are removed — report files are **never** deleted by
+the script; check the audit log and remove orphans by hand. It uses the
+database and R2 credentials in `.env`.
+
 ### Public site
 
 `/reports` lists **published** reports only, filtered by category tab, title

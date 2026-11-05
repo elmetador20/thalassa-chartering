@@ -11,6 +11,8 @@ import { requirePermissionPage } from '@/lib/server/auth/guards';
 import { listReports } from '@/lib/server/reports/queries';
 import { getStorageStatus } from '@/lib/server/storage';
 import { LinkButton } from '@/components/admin/LinkButton';
+import ReportCategoryNav from '@/components/admin/ReportCategoryNav';
+import { getReportCategoryCounts } from '@/lib/server/dashboard';
 
 export const metadata: Metadata = { title: 'Reports' };
 export const dynamic = 'force-dynamic';
@@ -20,15 +22,18 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export default async function ReportsPage({ searchParams }: { searchParams: SearchParams }) {
   const { admin } = await requirePermissionPage('reports:view');
   const query = parseAdminReportQuery(searchParams);
-  const result = await listReports({
-    status: query.status,
-    category: query.category,
-    query: query.q,
-    ...dateBounds(query.dateFilter),
-    sort: query.sort,
-    page: query.page,
-    pageSize: ADMIN_PAGE_SIZE,
-  });
+  const [result, categoryCounts] = await Promise.all([
+    listReports({
+      status: query.status,
+      category: query.category,
+      query: query.q,
+      ...dateBounds(query.dateFilter),
+      sort: query.sort,
+      page: query.page,
+      pageSize: ADMIN_PAGE_SIZE,
+    }),
+    getReportCategoryCounts(),
+  ]);
   const storage = getStorageStatus();
   const filtered = Boolean(query.q || query.status || query.category || query.dateFilter.mode !== 'all');
   const when = describeDateFilter(query.dateFilter);
@@ -45,8 +50,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Sear
             ? `${result.total} matching report${result.total === 1 ? '' : 's'}${when ? ` · ${when}` : ''}.`
             : `${result.total} report${result.total === 1 ? '' : 's'} across every status, newest report date first.`
         }
-        actions={canCreate ? <LinkButton href="/admin/reports/new">Upload report</LinkButton> : undefined}
+        actions={
+          canCreate ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              <LinkButton href="/admin/reports/bulk-import" $variant="secondary">
+                Bulk CSV import
+              </LinkButton>
+              <LinkButton href="/admin/reports/new">Upload new report</LinkButton>
+            </div>
+          ) : undefined
+        }
       />
+
+      <ReportCategoryNav query={query} counts={categoryCounts} />
 
       {notice === 'deleted' && <Alert tone="success">Report permanently deleted.</Alert>}
       {notice === 'deleted-file-kept' && (

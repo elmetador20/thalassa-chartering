@@ -35,6 +35,10 @@ export const PASSWORD_CHANGE_RATE_LIMIT = { max: 5, windowMs: 15 * MINUTE } as c
  *  the bucket. Every issued URL counts, not only failures. */
 export const REPORT_UPLOAD_RATE_LIMIT = { max: 60, windowMs: 10 * MINUTE } as const;
 
+/** Bulk import uploads, per admin: room for a full 1,000-row CSV plus
+ *  retries within an hour, while still capping a runaway client. */
+export const REPORT_IMPORT_RATE_LIMIT = { max: 1200, windowMs: 60 * MINUTE } as const;
+
 const RETENTION_MS = 24 * 60 * MINUTE;
 
 const hashKey = (key: string) => createHash('sha256').update(key, 'utf8').digest('hex');

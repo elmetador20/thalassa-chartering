@@ -38,7 +38,7 @@ export async function precheckPdf(file: File): Promise<string | null> {
   return null;
 }
 
-interface IssuedUpload {
+export interface IssuedUpload {
   uploadKey: string;
   url: string;
   method: 'PUT';
@@ -69,7 +69,7 @@ async function requestUploadUrl(file: File, signal?: AbortSignal): Promise<Issue
   return body;
 }
 
-function putFile(issued: IssuedUpload, file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<void> {
+export function putFile(issued: IssuedUpload, file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(issued.method, issued.url);

@@ -2,7 +2,19 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Container } from '@/components/ui';
 import ReportFilterBar from '@/components/reports/ReportFilterBar';
-import { CategoryTabs, Empty, FilterPanel, LightArea, Pagination, ReportList, ReportsBand, Summary } from '@/components/reports/PublicReports';
+import {
+  CategoryIntro,
+  CategoryOverview,
+  CategoryTabs,
+  Empty,
+  FilterPanel,
+  LightArea,
+  Pagination,
+  ReportList,
+  ReportsBand,
+  Summary,
+} from '@/components/reports/PublicReports';
+import { getReportCategoryCounts } from '@/lib/server/dashboard';
 import { todayInIndia } from '@/lib/reports/calendar';
 import { CATEGORY_LABELS, PUBLIC_PAGE_SIZE } from '@/lib/reports/constants';
 import { dateBounds, describeDateFilter, parsePublicReportQuery, toQueryString } from '@/lib/reports/filters';
@@ -31,14 +43,17 @@ export function generateMetadata({ searchParams }: { searchParams: SearchParams 
 
 export default async function ReportsIndexPage({ searchParams }: { searchParams: SearchParams }) {
   const query = parsePublicReportQuery(searchParams);
-  const result = await listPublishedReports({
-    category: query.category,
-    query: query.q,
-    ...dateBounds(query.dateFilter),
-    sort: query.sort,
-    page: query.page,
-    pageSize: PUBLIC_PAGE_SIZE,
-  });
+  const [result, counts] = await Promise.all([
+    listPublishedReports({
+      category: query.category,
+      query: query.q,
+      ...dateBounds(query.dateFilter),
+      sort: query.sort,
+      page: query.page,
+      pageSize: PUBLIC_PAGE_SIZE,
+    }),
+    getReportCategoryCounts('PUBLISHED'),
+  ]);
   const narrowed = Boolean(query.q || query.dateFilter.mode !== 'all');
   const when = describeDateFilter(query.dateFilter);
   const resetHref = `/reports${toQueryString({ category: query.category })}`;
@@ -53,6 +68,11 @@ export default async function ReportsIndexPage({ searchParams }: { searchParams:
       <LightArea>
         <Container $wide>
           <CategoryTabs query={query} />
+          {query.category ? (
+            <CategoryIntro category={query.category} count={counts[query.category]} />
+          ) : (
+            !narrowed && query.page === 1 && <CategoryOverview counts={counts} />
+          )}
           <FilterPanel>
             <ReportFilterBar key={toQueryString(query)} basePath="/reports" query={query} today={todayInIndia()} keepCategory />
           </FilterPanel>
