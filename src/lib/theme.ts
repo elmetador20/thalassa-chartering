@@ -52,6 +52,18 @@ export const theme = {
     lineOnDarkSoft: 'rgba(255, 255, 255, 0.08)',
     lineOnLight: 'rgba(0, 51, 102, 0.14)',
     lineOnLightSoft: 'rgba(0, 51, 102, 0.08)',
+
+    // --- Status (admin UI, light surfaces) ---
+    // Each text colour clears 4.5:1 on its own tint and on white.
+    success: '#17663A',
+    successSoft: '#E7F4EC',
+    warning: '#7A4B00',
+    warningSoft: '#FFF3D6',
+    danger: '#A61B1B',
+    dangerSoft: '#FCEBEB',
+    neutral: '#52677A',
+    neutralSoft: '#EEF2F5',
+    infoSoft: '#E6EEF6',
   },
 
   fonts: {

@@ -8,6 +8,7 @@
 
 # next.js
 /.next/
+/.next-e2e/
 /out/
 
 # production
@@ -23,7 +24,12 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+# .env holds real secrets (R2 keys, database URLs). Only .env.example is committed.
+.env
 .env*.local
+
+# Prisma client — regenerated on install (postinstall), never committed
+/src/generated/
 
 # typescript
 *.tsbuildinfo

@@ -11,10 +11,20 @@ environment; vivid orange (`#FF3F03`) is a strategic accent only.
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
-npm run build    # production build
-npm run start    # serve the production build
+npm run dev        # http://localhost:3000
+npm run build      # production build
+npm run start      # serve the production build
+
+npm run lint       # ESLint (src, scripts, tests)
+npm run typecheck  # TypeScript, no emit
+npm test           # unit + integration (starts its own throwaway Postgres)
+npm run test:e2e   # builds into .next-e2e, then HTTP tests against `next start`
 ```
+
+`npm run build` writes to `.next`, the same folder `npm run dev` uses — stop a
+running dev server before building, or it and the build will corrupt each
+other. `npm run test:e2e` builds into `.next-e2e` instead, so it is safe to run
+alongside a dev server.
 
 ## Structure
 
@@ -252,3 +262,143 @@ by `heroMedia.source` in `siteData.ts`:
   watermarked comp, so it renders soft and watermarked at hero size. Switching
   back is a one-word change, but it needs a licensed, higher-resolution pin to
   be worth doing.
+
+## Database
+
+PostgreSQL on the project's existing **Supabase** instance, through **Prisma
+7.10.1** (CLI, client and `@prisma/adapter-pg` pinned together — `prisma@latest`
+currently points at an 8.0 release candidate, so do not "upgrade" via the
+update notice).
+
+| Path | What |
+| --- | --- |
+| `prisma/schema.prisma` | Data model |
+| `prisma/migrations/` | Migration history — committed, applied in order |
+| `prisma.config.ts` | CLI config: env loading, migration connection, schema pinning |
+| `src/lib/server/db.ts` | The app's client (pooled connection, `server-only`) |
+| `src/lib/server/reports/` | Report queries, date-only helpers, R2 key minting |
+| `src/generated/prisma/` | Generated client — git-ignored, rebuilt by `postinstall` |
+
+### The `incworx` schema
+
+Every table lives in a dedicated Postgres schema, `incworx`, not Supabase's
+`public`:
+
+- Supabase exposes `public` through its REST API using the anon key, which is
+  public by design. `incworx` is not exposed, and the migration revokes the API
+  roles' access to it outright.
+- Prisma only inspects or resets schemas it manages, so no Prisma command can
+  touch existing data in `public`.
+- Prisma's migration history table also lives in `incworx`. `prisma.config.ts`
+  pins this automatically; without it, `migrate deploy` stops with **P3005** on
+  any Supabase project that already has tables in `public`.
+
+### Model
+
+`admin_users` 1 ── * `reports`, via `reports.created_by_id`. Deleting an admin
+who has reports is refused (RESTRICT); deactivate them with `is_active` instead.
+
+`report_date` is a `DATE`, independent of upload time, so historical reports can
+carry any past date. It crosses every boundary as a `'YYYY-MM-DD'` string and is
+only ever converted by `parseDateOnly` / `formatDateOnly`. Building a date in
+local time shifts it by the machine's offset (a day early in India).
+
+R2 objects are stored as **keys**, never URLs. Keys come from
+`newReportFileKey()` — `reports/<uuid>.pdf`, independent of title, date and file
+name — and are unique in the database.
+
+Lists order by `report_date`, then `created_at`, then `id`. Report date alone is
+not unique, and paginating over a non-unique order repeats or skips rows.
+
+Integrity rules the schema language cannot express are CHECK constraints in the
+migration: lower-case admin e-mail, URL-safe slugs, keys confined to `reports/`
+with no traversal, positive file size, and `published_at` required when
+published.
+
+### Commands
+
+```bash
+npm run db:validate   # check the schema (no database needed)
+npm run db:status     # what has / hasn't been applied
+npm run db:deploy     # apply pending migrations — the only command for Supabase
+npm run db:studio     # browse the data
+```
+
+`npm run db:deploy` never resets anything: it only applies pending migrations,
+each recorded once. **Do not run `prisma migrate reset`, `prisma db push
+--force-reset` or `--accept-data-loss` against Supabase.** Use `npm run
+db:migrate` (`migrate dev`) only against a disposable development database: if
+it detects drift it offers to reset, which deletes data.
+
+## Admin authentication
+
+Everything under `/admin` is for INCWORX staff. There is **no public sign-up**:
+one Super Admin is created by a seed script, and every other account is created
+by that Super Admin and must be approved before it can sign in.
+
+### Roles
+
+Permissions, not roles, are what the code checks — the whole table lives in
+`src/lib/auth/permissions.ts`, and every rule is enforced on the server.
+
+| Permission | Super Admin | Admin |
+| --- | :---: | :---: |
+| Dashboard, own account, password change | ✓ | ✓ |
+| View, upload, edit, replace PDF, publish, archive reports | ✓ | ✓ |
+| **Delete** reports | ✓ | — |
+| View, create, approve / reject, activate / deactivate administrators | ✓ | — |
+| See everyone's activity (Admins see their own) | ✓ | — |
+
+The admin-management workflow can only ever create the **Admin** role. A Super
+Admin cannot be created, promoted to, approved, rejected or deactivated from
+the UI.
+
+### Account lifecycle
+
+| From | Action (Super Admin) | To | Can sign in |
+| --- | --- | --- | :---: |
+| — | create | PENDING, inactive | — |
+| PENDING or REJECTED | approve | APPROVED, active | ✓ |
+| PENDING or APPROVED | reject (optional reason) | REJECTED, inactive | — |
+| APPROVED, active | deactivate | APPROVED, inactive | — |
+| APPROVED, inactive | activate | APPROVED, active | ✓ |
+
+Rejecting or deactivating an account ends every session it has, immediately.
+Nobody can act on their own account.
+
+### How it is secured
+
+| Concern | How |
+| --- | --- |
+| Passwords | Argon2id, 64 MiB / 3 passes / 1 lane (~170 ms), NFKC-normalised. Hashes are omitted from every query unless the sign-in code asks for them. |
+| Password policy | 12–128 chars; upper, lower, number, special; no sequences (`abcd`, `1234`, `qwer`), no repeats, no name or e-mail. **Plus, server-side only:** a zxcvbn-ts strength estimate with a 40,000-entry common-password list and English names/words — score 4 required. The same Zod schemas validate in the browser (instant feedback) and on the server (enforcement); the dictionaries never ship to the browser. |
+| Sign-in | Validates shape only, so accounts made under an older policy still sign in. Wrong password and unknown e-mail get the same message and the same timing. Pending / rejected / inactive messages are shown only **after** the password is proven. |
+| Sessions | Random 256-bit token in an `HttpOnly`, `Secure`, `SameSite=Strict`, `__Host-` cookie; only its SHA-256 is stored. 12 h absolute, 2 h idle. Every request re-reads the session **and** the account. Password change ends every session and rotates the current one. |
+| Brute force | Postgres-backed rate limits, checked before any hashing: 5 failures / 15 min per account, 20 / 15 min per IP, 5 / 15 min for current-password checks. Keys are stored hashed. |
+| CSRF | Next.js rejects server-action POSTs from another origin; the session cookie is `SameSite=Strict`. |
+| Authorization | `middleware.ts` is only a fast redirect for missing cookies. The boundary is `src/lib/server/auth/guards.ts`, called by every protected page and every server action; services re-check the permission themselves. |
+| Database rules | Enforced by Postgres, so they hold even for Prisma Studio or raw SQL: only approved accounts can be active; an Admin's approval records its approver; the approver must be a Super Admin and never the account itself; **the last active Super Admin can't be deactivated, demoted or deleted**; the audit log is append-only. |
+| Audit | `audit_logs`: admin created / approved / rejected / activated / deactivated, sign-in success and failure, sign-out, password change (report events are ready for the reports stage). Actor, target, time, IP, user agent and non-sensitive metadata — a writer-side filter drops anything that looks like a secret. |
+| Responses | `/admin` is `noindex`, can't be framed, and sends `Referrer-Policy: same-origin`. |
+
+Password reset by e-mail is **not** implemented: there is no e-mail delivery
+service in this project. An admin who loses their password is deactivated by
+the Super Admin and a new account created.
+
+### First-time setup
+
+1. Add `DATABASE_URL` and `DIRECT_URL` to `.env` (see `.env.example`).
+2. `npm run db:deploy` — applies both migrations.
+3. `npm run db:seed` — creates the Super Admin. You are asked for name, e-mail
+   and password (hidden). It does nothing if a Super Admin already exists, and
+   never changes an existing account.
+4. Sign in at `/admin/login`, open **Administrators**, add an admin, approve it.
+
+### Tests
+
+`npm test` starts a real, throwaway PostgreSQL (`embedded-postgres`), shaped
+like the Supabase project (API roles, existing data in `public`), applies the
+migrations with the real `prisma migrate deploy`, and runs unit and
+integration tests. `npm run test:e2e` additionally builds the app and runs HTTP
+tests against `next start`: redirects, cookie flags, CSRF, the no-JS sign-in
+form, response headers, and a scan of the browser bundle for secrets.

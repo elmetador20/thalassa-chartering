@@ -1,0 +1,248 @@
+// ============================================================================
+// INCWORX — database schema
+//
+// Target: the project's existing Supabase PostgreSQL database.
+//
+// Everything lives in a dedicated `incworx` Postgres schema rather than
+// Supabase's `public` schema, deliberately:
+//
+//   1. Supabase publishes `public` through its auto-generated REST API, keyed
+//      by the anon key — which is public by design. Tables in a schema that
+//      is not exposed cannot be reached that way at all.
+//   2. Prisma only inspects, diffs and (if ever asked to) resets the schemas it
+//      manages. Whatever already lives in `public` is invisible to it, so no
+//      Prisma command can drop or rewrite that data.
+//   3. No risk of colliding with an existing `reports` or `admin_users` table.
+//
+// Conventions: camelCase in TypeScript, snake_case in the database (@map), so
+// the tables are pleasant to query directly — e.g. a SQL backfill of
+// historical reports — without quoting every identifier.
+//
+// CHECK constraints and the access-hardening statements cannot be expressed in
+// Prisma's schema language. They live in the migration SQL, in clearly marked
+// hand-written sections; Prisma does not diff them, so they never cause drift.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["incworx"]
+}
+
+// ------------------------------------------------------------------- enums --
+
+enum ReportCategory {
+  GLOBAL
+  DOMESTIC
+  SPECIAL
+
+  @@map("report_category")
+  @@schema("incworx")
+}
+
+enum ReportStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("report_status")
+  @@schema("incworx")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+
+  @@map("admin_role")
+  @@schema("incworx")
+}
+
+enum AdminApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("admin_approval_status")
+  @@schema("incworx")
+}
+
+/// Every security-relevant event. Append-only: a trigger refuses UPDATE,
+/// DELETE and TRUNCATE on audit_logs.
+enum AuditAction {
+  SUPER_ADMIN_SEEDED
+  ADMIN_CREATED
+  ADMIN_APPROVED
+  ADMIN_REJECTED
+  ADMIN_ACTIVATED
+  ADMIN_DEACTIVATED
+  LOGIN_SUCCEEDED
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_CHANGED
+  REPORT_UPLOADED
+  REPORT_UPDATED
+  REPORT_FILE_REPLACED
+  REPORT_PUBLISHED
+  REPORT_ARCHIVED
+  REPORT_DELETED
+
+  @@map("audit_action")
+  @@schema("incworx")
+}
+
+// -------------------------------------------------------------- admin users --
+
+/// People who can sign in to the admin area. There is no public sign-up: the
+/// single initial SUPER_ADMIN comes from the seed script, every ADMIN is
+/// created by a Super Admin and starts PENDING and inactive.
+///
+/// Admins are deactivated (isActive = false), never deleted, so the
+/// authorship of every report and approval stays intact.
+///
+/// Invariants enforced in the database itself (see migration SQL), so they hold
+/// whatever writes to this table — the app, Prisma Studio or raw SQL:
+///   - only APPROVED accounts can be active
+///   - an ADMIN can only be APPROVED with a recorded approver
+///   - the approver must be a SUPER_ADMIN, and never the account itself
+///   - the last active SUPER_ADMIN cannot be deactivated, demoted or deleted
+model AdminUser {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Stored lower-cased (enforced by a CHECK), which makes the unique index
+  /// effectively case-insensitive without needing the citext extension.
+  email           String              @unique @db.VarChar(320)
+  name            String              @db.VarChar(120)
+  passwordHash    String              @map("password_hash") @db.VarChar(255)
+  role            AdminRole           @default(ADMIN)
+  approvalStatus  AdminApprovalStatus @default(PENDING) @map("approval_status")
+  /// Defaults to false: a new account cannot sign in until it is approved.
+  isActive        Boolean             @default(false) @map("is_active")
+  approvedById    String?             @map("approved_by_id") @db.Uuid
+  approvedBy      AdminUser?          @relation("AdminApprovals", fields: [approvedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approvedAt      DateTime?           @map("approved_at") @db.Timestamptz(3)
+  rejectionReason String?             @map("rejection_reason") @db.VarChar(500)
+  lastLoginAt     DateTime?           @map("last_login_at") @db.Timestamptz(3)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  reports        Report[]
+  approvedAdmins AdminUser[]    @relation("AdminApprovals")
+  sessions       AdminSession[]
+  auditEvents    AuditLog[]     @relation("AuditActor")
+
+  @@index([approvalStatus, createdAt(sort: Desc)])
+  @@map("admin_users")
+  @@schema("incworx")
+}
+
+/// A signed-in browser. The cookie carries a random 256-bit token; only its
+/// SHA-256 is stored here, so a database leak yields no usable sessions.
+/// Deleting the row ends the session immediately.
+model AdminSession {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash   String    @unique @map("token_hash") @db.Char(64)
+  adminUserId String    @map("admin_user_id") @db.Uuid
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Throttled "last request" time, for the idle timeout.
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  /// Absolute expiry, set at sign-in and never extended.
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  ipAddress   String?   @map("ip_address") @db.VarChar(64)
+  userAgent   String?   @map("user_agent") @db.VarChar(512)
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+  @@schema("incworx")
+}
+
+/// Failed authentication attempts, for rate limiting. Keys are SHA-256 hashes
+/// of a scope plus value ("email:…", "ip:…"), so no address or IP is stored in
+/// the clear. Rows older than a day are pruned as new failures arrive.
+model AuthAttempt {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  keyHash   String   @map("key_hash") @db.Char(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([keyHash, createdAt])
+  @@index([createdAt])
+  @@map("auth_attempts")
+  @@schema("incworx")
+}
+
+/// Append-only security audit trail. `metadata` is non-sensitive context only:
+/// the writer strips anything that looks like a password, hash, token or secret.
+model AuditLog {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  action     AuditAction
+  /// Who did it — null for anonymous events such as a failed sign-in with an
+  /// unknown e-mail. RESTRICT: audited admins can never be hard-deleted.
+  actorId    String?     @map("actor_id") @db.Uuid
+  actor      AdminUser?  @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// What it was done to: 'admin_user' or 'report' plus that row's id.
+  targetType String?     @map("target_type") @db.VarChar(40)
+  targetId   String?     @map("target_id") @db.Uuid
+  metadata   Json        @default("{}") @db.JsonB
+  ipAddress  String?     @map("ip_address") @db.VarChar(64)
+  userAgent  String?     @map("user_agent") @db.VarChar(512)
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([targetType, targetId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+  @@schema("incworx")
+}
+
+// ------------------------------------------------------------------ reports --
+
+model Report {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String         @db.VarChar(300)
+  /// URL segment. Lower-case words joined by single hyphens (CHECK-enforced).
+  slug        String         @unique @db.VarChar(160)
+  description String?        @db.Text
+  category    ReportCategory
+
+  /// The business date the report covers. A pure DATE: no time, no time zone,
+  /// completely independent of when the file was uploaded — which is what
+  /// lets historical reports be back-filled with any past date.
+  reportDate DateTime @map("report_date") @db.Date
+
+  /// Original file name as uploaded — display and download name only.
+  fileName String @map("file_name") @db.VarChar(255)
+  /// Cloudflare R2 object key — never a URL. URLs are minted on demand as
+  /// short-lived signed links, so an archived or deleted report stops being
+  /// reachable immediately. Unique: no two rows can point at one object.
+  fileKey  String @unique @map("file_key") @db.VarChar(512)
+  /// Bytes. INTEGER caps at ~2 GB, far beyond any PDF this site accepts.
+  fileSize Int    @map("file_size")
+  mimeType String @default("application/pdf") @map("mime_type") @db.VarChar(100)
+
+  status ReportStatus @default(DRAFT)
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  /// Set when first published. Required whenever status = PUBLISHED (CHECK).
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+
+  createdById String    @map("created_by_id") @db.Uuid
+  /// RESTRICT: an admin who has uploaded reports cannot be hard-deleted —
+  /// deactivate them instead. Nothing ever cascades into report deletion.
+  createdBy   AdminUser @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // Every list is ordered by report date. Each index below serves one real
+  // query shape, with the filter columns leading and report_date last so the
+  // ORDER BY ... LIMIT is read straight off the index:
+  @@index([status, reportDate(sort: Desc)]) // public list, all categories
+  @@index([status, category, reportDate(sort: Desc)]) // public list, one category
+  @@index([category, reportDate(sort: Desc)]) // admin list, filtered by category
+  @@index([reportDate(sort: Desc)]) // admin list, unfiltered
+  @@index([createdById]) // FK: "reports by admin" + RESTRICT check
+  @@map("reports")
+  @@schema("incworx")
+}
