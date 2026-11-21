@@ -11,7 +11,7 @@ import { getDb } from './db';
 // together. The table itself is append-only (database trigger).
 // ============================================================================
 
-export type AuditTargetType = 'admin_user' | 'report';
+export type AuditTargetType = 'admin_user' | 'report' | 'access_request';
 
 /** Flat, non-sensitive context. Values are bounded in length on write. */
 export type AuditMetadata = Record<string, string | number | boolean | null>;
@@ -101,11 +101,17 @@ export async function listRecentActivity(
   const idsOf = (type: AuditTargetType) => [...new Set(rows.filter((r) => r.targetType === type && r.targetId).map((r) => r.targetId!))];
   const adminIds = idsOf('admin_user');
   const reportIds = idsOf('report');
-  const [admins, reports] = await Promise.all([
+  const requestIds = idsOf('access_request');
+  const [admins, reports, requests] = await Promise.all([
     adminIds.length ? db.adminUser.findMany({ where: { id: { in: adminIds } }, select: { id: true, name: true } }) : [],
     reportIds.length ? db.report.findMany({ where: { id: { in: reportIds } }, select: { id: true, title: true } }) : [],
+    requestIds.length ? db.accessRequest.findMany({ where: { id: { in: requestIds } }, select: { id: true, fullName: true } }) : [],
   ]);
-  const labels = new Map<string, string>([...admins.map((a) => [a.id, a.name] as const), ...reports.map((r) => [r.id, r.title] as const)]);
+  const labels = new Map<string, string>([
+    ...admins.map((a) => [a.id, a.name] as const),
+    ...reports.map((r) => [r.id, r.title] as const),
+    ...requests.map((r) => [r.id, r.fullName] as const),
+  ]);
 
   return rows.map((row) => {
     const metadata = (row.metadata ?? {}) as AuditMetadata;

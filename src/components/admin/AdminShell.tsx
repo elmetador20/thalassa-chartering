@@ -99,6 +99,22 @@ const NavLink = styled(Link)<{ $active: boolean }>`
   }
 `;
 
+/** Pending count next to a nav item. */
+const Count = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: ${({ theme }) => theme.colors.orange};
+  color: ${({ theme }) => theme.colors.navy};
+  font-size: 12px;
+  font-weight: 600;
+`;
+
 const Account = styled.div`
   display: flex;
   align-items: center;
@@ -150,18 +166,21 @@ interface ShellProps {
   /** From the server's permission table; hides links the role cannot use.
    *  Hiding is cosmetic — the pages themselves refuse unauthorised roles. */
   canManageAdmins: boolean;
+  /** Super Admin only: shows Access Requests, with the number waiting. */
+  accessRequests?: { pending: number } | null;
   children: React.ReactNode;
 }
 
-export default function AdminShell({ admin, canManageAdmins, children }: ShellProps) {
+export default function AdminShell({ admin, canManageAdmins, accessRequests = null, children }: ShellProps) {
   const pathname = usePathname();
   const links = [
     { href: '/admin', label: 'Dashboard' },
     { href: '/admin/reports', label: 'Reports' },
     // On phones "Admins" keeps all four tabs on screen from 360px up.
     ...(canManageAdmins ? [{ href: '/admin/users', label: 'Administrators', short: 'Admins' }] : []),
+    ...(accessRequests ? [{ href: '/admin/access-requests', label: 'Access Requests', short: 'Requests', count: accessRequests.pending }] : []),
     { href: '/admin/account', label: 'Account' },
-  ] as { href: string; label: string; short?: string }[];
+  ] as { href: string; label: string; short?: string; count?: number }[];
   const isActive = (href: string) => (href === '/admin' ? pathname === '/admin' : pathname.startsWith(href));
 
   return (
@@ -181,7 +200,7 @@ export default function AdminShell({ admin, canManageAdmins, children }: ShellPr
                     href={link.href}
                     $active={isActive(link.href)}
                     aria-current={isActive(link.href) ? 'page' : undefined}
-                    aria-label={link.short ? link.label : undefined}
+                    aria-label={link.short ? `${link.label}${link.count ? ` (${link.count} pending)` : ''}` : undefined}
                   >
                     {link.short ? (
                       <>
@@ -193,6 +212,7 @@ export default function AdminShell({ admin, canManageAdmins, children }: ShellPr
                     ) : (
                       link.label
                     )}
+                    {link.count ? <Count aria-hidden="true">{link.count}</Count> : null}
                   </NavLink>
                 </li>
               ))}

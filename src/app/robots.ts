@@ -4,7 +4,7 @@ import type { MetadataRoute } from 'next';
 // by their own noindex headers / meta tags.
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: [{ userAgent: '*', allow: '/', disallow: ['/admin', '/api/'] }],
+    rules: [{ userAgent: '*', allow: '/', disallow: ['/admin', '/api/', '/request-access', '/accept-invitation'] }],
     sitemap: 'https://incworx.in/sitemap.xml',
   };
 }

@@ -27,6 +27,8 @@ export function formatCalendarDate(ymd: string): string {
 /** Keyed by plain string so it accepts values straight from the database. */
 export const CATEGORY_LABELS: Record<string, string> = { ...REPORT_CATEGORY_LABELS };
 
+const ROLE_NAMES: Record<string, string> = { ADMIN: 'Admin', SUPER_ADMIN: 'Super Admin' };
+
 const LOGIN_FAILURE_LABELS: Record<string, string> = {
   invalid_credentials: 'wrong email or password',
   rate_limited: 'rate limited',
@@ -45,7 +47,9 @@ export interface ActivityLike {
 /** One readable sentence per audit event. */
 export function describeActivity(item: ActivityLike): string {
   const who = item.actor?.name ?? 'Someone';
-  const whom = item.target?.label ?? (item.target?.type === 'report' ? 'a report' : 'an account');
+  const whom =
+    item.target?.label ??
+    (item.target?.type === 'report' ? 'a report' : item.target?.type === 'access_request' ? 'a requester' : 'an account');
   switch (item.action) {
     case 'SUPER_ADMIN_SEEDED':
       return `Super Admin account ${whom} was set up`;
@@ -83,6 +87,18 @@ export function describeActivity(item: ActivityLike): string {
       return `${who} restored ${whom} to draft`;
     case 'REPORT_DELETED':
       return `${who} deleted ${whom}`;
+    case 'ACCESS_REQUEST_SUBMITTED':
+      return `${whom} requested access`;
+    case 'ACCESS_REQUEST_APPROVED':
+      return `${who} approved the access request from ${whom}`;
+    case 'ACCESS_REQUEST_REJECTED':
+      return `${who} rejected the access request from ${whom}`;
+    case 'ROLE_ASSIGNED':
+      return `${who} assigned the ${ROLE_NAMES[String(item.metadata.role)] ?? 'Admin'} role to ${whom}`;
+    case 'INVITATION_CREATED':
+      return item.metadata.regenerated ? `${who} generated a new invitation link for ${whom}` : `${who} generated an invitation link for ${whom}`;
+    case 'INVITATION_ACCEPTED':
+      return `${who} accepted the invitation and set up their account`;
     default:
       return 'Activity';
   }

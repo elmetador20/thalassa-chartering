@@ -9,6 +9,7 @@
 # next.js
 /.next/
 /.next-e2e/
+/.next-r2-build/
 /out/
 
 # production

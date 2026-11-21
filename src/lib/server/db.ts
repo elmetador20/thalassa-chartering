@@ -41,7 +41,7 @@ export type DbTx = Omit<Db, ITXClientDenyList>;
 
 // One client per process. Cached on globalThis so that dev-mode hot reloads,
 // which re-evaluate modules, don't open a fresh pool on every save.
-const globalForDb = globalThis as unknown as { incworxDb?: Db };
+const globalForDb = globalThis as unknown as { incworxDb?: Db; incworxDbClass?: typeof PrismaClient };
 
 /**
  * The shared database client, created on first use.
@@ -50,6 +50,18 @@ const globalForDb = globalThis as unknown as { incworxDb?: Db };
  * throw, so builds and pages that never query stay independent of credentials.
  */
 export function getDb(): Db {
-  globalForDb.incworxDb ??= createClient();
+  // After `prisma generate`, a dev-mode hot reload brings in a new PrismaClient
+  // class, but globalThis still holds an instance of the old one — which knows
+  // nothing about newly added models (`db.newModel` is undefined). Replace it.
+  // In production the module loads once, so this never triggers.
+  if (globalForDb.incworxDb && globalForDb.incworxDbClass !== PrismaClient) {
+    const stale = globalForDb.incworxDb;
+    globalForDb.incworxDb = undefined;
+    void stale.$disconnect().catch(() => {});
+  }
+  if (!globalForDb.incworxDb) {
+    globalForDb.incworxDb = createClient();
+    globalForDb.incworxDbClass = PrismaClient;
+  }
   return globalForDb.incworxDb;
 }

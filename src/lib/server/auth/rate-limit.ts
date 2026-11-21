@@ -39,6 +39,18 @@ export const REPORT_UPLOAD_RATE_LIMIT = { max: 60, windowMs: 10 * MINUTE } as co
  *  retries within an hour, while still capping a runaway client. */
 export const REPORT_IMPORT_RATE_LIMIT = { max: 1200, windowMs: 60 * MINUTE } as const;
 
+/** Public "Request access" form. Every submission counts (not only failures).
+ *  The per-e-mail limit stops someone flooding one address's request; the
+ *  per-IP limit stops one source spraying many. */
+export const ACCESS_REQUEST_RATE_LIMITS = {
+  perIp: { max: 5, windowMs: 60 * MINUTE },
+  perEmail: { max: 3, windowMs: 24 * 60 * MINUTE },
+} as const;
+
+/** Invalid invitation links tried from one IP (tokens are 256-bit random, so
+ *  this only blunts noise and scripted probing). */
+export const INVITATION_RATE_LIMIT = { max: 20, windowMs: 15 * MINUTE } as const;
+
 const RETENTION_MS = 24 * 60 * MINUTE;
 
 const hashKey = (key: string) => createHash('sha256').update(key, 'utf8').digest('hex');

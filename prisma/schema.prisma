@@ -90,8 +90,23 @@ enum AuditAction {
   REPORT_ARCHIVED
   REPORT_RESTORED
   REPORT_DELETED
+  ACCESS_REQUEST_SUBMITTED
+  ACCESS_REQUEST_APPROVED
+  ACCESS_REQUEST_REJECTED
+  INVITATION_CREATED
+  INVITATION_ACCEPTED
+  ROLE_ASSIGNED
 
   @@map("audit_action")
+  @@schema("incworx")
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("access_request_status")
   @@schema("incworx")
 }
 
@@ -133,6 +148,11 @@ model AdminUser {
   approvedAdmins AdminUser[]    @relation("AdminApprovals")
   sessions       AdminSession[]
   auditEvents    AuditLog[]     @relation("AuditActor")
+
+  reviewedAccessRequests AccessRequest[]   @relation("AccessRequestReviews")
+  invitationsCreated     AdminInvitation[] @relation("InvitationsCreated")
+  /// The invitation this account was created from, if any.
+  invitationAccepted     AdminInvitation?  @relation("InvitationAccepted")
 
   @@index([approvalStatus, createdAt(sort: Desc)])
   @@map("admin_users")
@@ -250,5 +270,74 @@ model Report {
   @@index([reportDate(sort: Desc)]) // admin list, unfiltered
   @@index([createdById]) // FK: "reports by admin" + RESTRICT check
   @@map("reports")
+  @@schema("incworx")
+}
+
+// ---------------------------------------------------------- access requests --
+
+/// A request for an administrator account, made on the public Request Access
+/// page. It holds no password and grants nothing by itself: a Super Admin
+/// approves or rejects it, and an approval issues an AdminInvitation.
+///
+/// Database-enforced (migration SQL): lower-case e-mail; at most one PENDING
+/// request per e-mail (`pending_email` is the e-mail while pending, NULL
+/// otherwise, and unique); reviewer / review time present exactly when
+/// reviewed; an assigned role exactly when approved; a rejection reason only
+/// when rejected; the reviewer must be a SUPER_ADMIN (trigger).
+model AccessRequest {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName        String              @map("full_name") @db.VarChar(120)
+  email           String              @db.VarChar(320)
+  department      String              @db.VarChar(160)
+  designation     String              @db.VarChar(120)
+  reason          String              @db.VarChar(1000)
+  status          AccessRequestStatus @default(PENDING)
+  pendingEmail    String?             @unique @map("pending_email") @db.VarChar(320)
+  /// The role chosen by the Super Admin on approval.
+  assignedRole    AdminRole?          @map("assigned_role")
+  reviewedById    String?             @map("reviewed_by_id") @db.Uuid
+  reviewedBy      AdminUser?          @relation("AccessRequestReviews", fields: [reviewedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reviewedAt      DateTime?           @map("reviewed_at") @db.Timestamptz(3)
+  rejectionReason String?             @map("rejection_reason") @db.VarChar(500)
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  invitations AdminInvitation[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([email])
+  @@map("access_requests")
+  @@schema("incworx")
+}
+
+/// A single-use, time-limited link that lets an approved requester create
+/// their account and choose their own password. Only the SHA-256 of the
+/// random token is stored. Name, e-mail and role are fixed here at approval
+/// time, so nothing in the link can change them.
+///
+/// Database-enforced: role is ADMIN (an invitation can never create a Super
+/// Admin); expiry after creation; used and revoked are exclusive; used exactly
+/// when an account was created from it; the creator must be a SUPER_ADMIN.
+model AdminInvitation {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accessRequestId String        @map("access_request_id") @db.Uuid
+  accessRequest   AccessRequest @relation(fields: [accessRequestId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  email           String        @db.VarChar(320)
+  name            String        @db.VarChar(120)
+  role            AdminRole
+  tokenHash       String        @unique @map("token_hash") @db.Char(64)
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(3)
+  usedAt          DateTime?     @map("used_at") @db.Timestamptz(3)
+  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(3)
+  createdById     String        @map("created_by_id") @db.Uuid
+  createdBy       AdminUser     @relation("InvitationsCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  /// The account created from this invitation.
+  acceptedById    String?       @unique @map("accepted_by_id") @db.Uuid
+  acceptedBy      AdminUser?    @relation("InvitationAccepted", fields: [acceptedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([accessRequestId, createdAt(sort: Desc)])
+  @@index([createdById])
+  @@map("admin_invitations")
   @@schema("incworx")
 }

@@ -20,7 +20,7 @@ export async function resetDatabase(): Promise<void> {
   const db = getDb();
   await db.$executeRawUnsafe('ALTER TABLE incworx.audit_logs DISABLE TRIGGER USER');
   await db.$executeRawUnsafe(
-    'TRUNCATE incworx.audit_logs, incworx.admin_sessions, incworx.auth_attempts, incworx.reports, incworx.admin_users CASCADE',
+    'TRUNCATE incworx.audit_logs, incworx.admin_sessions, incworx.auth_attempts, incworx.reports, incworx.admin_invitations, incworx.access_requests, incworx.admin_users CASCADE',
   );
   await db.$executeRawUnsafe('ALTER TABLE incworx.audit_logs ENABLE TRIGGER USER');
 }

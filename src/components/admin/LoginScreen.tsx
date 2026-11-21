@@ -1,106 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import Image from 'next/image';
 import { useFormState, useFormStatus } from 'react-dom';
-import styled from 'styled-components';
 import { loginAction } from '@/app/admin/actions/auth';
 import { IDLE_FORM_STATE } from '@/lib/forms';
 import { loginSchema, toFieldErrors, type FieldErrors } from '@/lib/validation/auth';
+import AuthLayout, { AuthFootnote, AuthForm, AuthLink } from './AuthLayout';
 import { Alert, Button, Field, Input, PasswordInput } from './ui';
-
-const Layout = styled.div`
-  min-height: 100vh;
-  min-height: 100svh;
-  display: grid;
-  /* Phones: a slim brand band, then the form takes the rest of the screen. */
-  grid-template-rows: auto minmax(0, 1fr);
-
-  @media (min-width: 900px) {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
-    grid-template-rows: none;
-  }
-`;
-
-const BrandPanel = styled.aside`
-  background: ${({ theme }) => theme.colors.navyDeep};
-  color: #fff;
-  padding: 28px clamp(20px, 5vw, 64px);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 32px;
-  border-bottom: 2px solid ${({ theme }) => theme.colors.orange};
-
-  img {
-    height: 26px;
-    width: auto;
-  }
-
-  h1 {
-    font-size: clamp(28px, 2.4vw + 14px, 44px);
-    font-weight: 400;
-    line-height: 1.12;
-    letter-spacing: -0.012em;
-    max-width: 14ch;
-  }
-
-  p {
-    font-size: 15px;
-    line-height: 1.6;
-    color: ${({ theme }) => theme.colors.bodyOnDark};
-    max-width: 38ch;
-  }
-
-  .copy {
-    display: none;
-  }
-
-  @media (min-width: 900px) {
-    border-bottom: 0;
-    border-right: 2px solid ${({ theme }) => theme.colors.orange};
-    padding-block: 48px;
-    .copy {
-      display: grid;
-      gap: 16px;
-    }
-  }
-`;
-
-const FormSide = styled.main`
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: clamp(32px, 6vw, 72px) clamp(20px, 5vw, 48px);
-
-  @media (min-width: 900px) {
-    align-items: center;
-  }
-`;
-
-const Card = styled.div`
-  width: 100%;
-  max-width: 420px;
-  display: grid;
-  gap: 22px;
-
-  h2 {
-    font-size: 26px;
-    font-weight: 400;
-    color: ${({ theme }) => theme.colors.textOnLight};
-  }
-
-  .sub {
-    margin-top: 6px;
-    font-size: 14.5px;
-    color: ${({ theme }) => theme.colors.mutedOnLight};
-  }
-`;
-
-const Form = styled.form`
-  display: grid;
-  gap: 18px;
-`;
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -111,7 +17,7 @@ function SubmitButton() {
   );
 }
 
-export default function LoginScreen({ next }: { next: string }) {
+export default function LoginScreen({ next, activated = false }: { next: string; activated?: boolean }) {
   const [state, formAction] = useFormState(loginAction, IDLE_FORM_STATE);
   const [email, setEmail] = useState(state.values?.email ?? '');
   const [password, setPassword] = useState('');
@@ -144,65 +50,58 @@ export default function LoginScreen({ next }: { next: string }) {
   }
 
   return (
-    <Layout>
-      <BrandPanel>
-        <Image src="/images/incworx-logo-reversed.png" alt="INCWORX" width={1396} height={195} sizes="180px" priority />
-        <div className="copy">
-          <h1>Reports administration</h1>
-          <p>Sign in to manage INCWORX Global, Domestic and Special reports. Access is granted by the Super Admin.</p>
-        </div>
-      </BrandPanel>
+    <AuthLayout
+      heading="Reports administration"
+      description="Sign in to manage INCWORX Global, Domestic and Special reports. Access is granted by the Super Admin."
+      title="Sign in"
+      subtitle="Use the email address your account was created with."
+    >
+      {activated && state.status !== 'error' && <Alert tone="success">Your account is ready. Sign in with your email and new password.</Alert>}
+      {state.status === 'error' && state.message && <Alert tone="error">{state.message}</Alert>}
 
-      <FormSide>
-        <Card>
-          <div>
-            <h2>Sign in</h2>
-            <p className="sub">Use the email address your account was created with.</p>
-          </div>
+      <AuthForm action={formAction} onSubmit={onSubmit} noValidate>
+        <input type="hidden" name="next" value={next} />
 
-          {state.status === 'error' && state.message && <Alert tone="error">{state.message}</Alert>}
+        <Field label="Email" errors={errors.email}>
+          {(a11y) => (
+            <Input
+              {...a11y}
+              ref={emailRef}
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="username"
+              autoCapitalize="off"
+              spellCheck={false}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              $invalid={a11y['aria-invalid']}
+              required
+            />
+          )}
+        </Field>
 
-          <Form action={formAction} onSubmit={onSubmit} noValidate>
-            <input type="hidden" name="next" value={next} />
+        <Field label="Password" errors={errors.password}>
+          {(a11y) => (
+            <PasswordInput
+              {...a11y}
+              ref={passwordRef}
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              $invalid={a11y['aria-invalid']}
+              required
+            />
+          )}
+        </Field>
 
-            <Field label="Email" errors={errors.email}>
-              {(a11y) => (
-                <Input
-                  {...a11y}
-                  ref={emailRef}
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="username"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  $invalid={a11y['aria-invalid']}
-                  required
-                />
-              )}
-            </Field>
+        <SubmitButton />
+      </AuthForm>
 
-            <Field label="Password" errors={errors.password}>
-              {(a11y) => (
-                <PasswordInput
-                  {...a11y}
-                  ref={passwordRef}
-                  name="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  $invalid={a11y['aria-invalid']}
-                  required
-                />
-              )}
-            </Field>
-
-            <SubmitButton />
-          </Form>
-        </Card>
-      </FormSide>
-    </Layout>
+      <AuthFootnote>
+        Don&apos;t have an account? <AuthLink href="/request-access">Request access</AuthLink>
+      </AuthFootnote>
+    </AuthLayout>
   );
 }

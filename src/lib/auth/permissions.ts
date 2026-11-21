@@ -28,6 +28,9 @@ export const PERMISSIONS = [
   'admins:create',
   'admins:approve',
   'admins:set-active',
+  // Access requests — Super Admin only: review, approve / reject, assign role,
+  // issue invitations, see request history.
+  'access-requests:review',
   // Activity and settings
   'activity:view-all',
   'settings:manage',
