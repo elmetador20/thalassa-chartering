@@ -6,6 +6,7 @@ import styled from 'styled-components';
 import { Container, Meta } from './ui';
 import { ArrowUpRight } from './icons';
 import { footer, hero, about } from '@/data/siteData';
+import { useSiteLinks } from '@/lib/site-links';
 
 /** Footer link labels resolve to the section anchors used across the page. */
 const HREFS: Record<string, string> = {
@@ -21,6 +22,7 @@ const HREFS: Record<string, string> = {
   Tectonics: '#tectonics',
   Digitronics: '#digitronics',
   'Global Presence': '#global',
+  Reports: '/reports',
   Leadership: '#leadership',
   Sustainability: '#sustainability',
 };
@@ -217,6 +219,7 @@ const ToTop = styled.a`
 `;
 
 export default function Footer() {
+  const { onHome, href } = useSiteLinks();
   return (
     <Wrap>
       <Top $wide>
@@ -246,7 +249,7 @@ export default function Footer() {
               <ul>
                 {col.links.map((label) => (
                   <li key={label}>
-                    <a href={HREFS[label] ?? '#contact'}>{label}</a>
+                    <a href={href(HREFS[label] ?? '#contact')}>{label}</a>
                   </li>
                 ))}
               </ul>
@@ -282,12 +285,12 @@ export default function Footer() {
           <Legal>
             {footer.legal.map((l) => (
               <li key={l}>
-                <a href="#contact">{l}</a>
+                <a href={href('#contact')}>{l}</a>
               </li>
             ))}
           </Legal>
 
-          <ToTop href="#home">
+          <ToTop href={onHome ? '#home' : '#'}>
             Back to top
             <ArrowUpRight size={14} />
           </ToTop>
