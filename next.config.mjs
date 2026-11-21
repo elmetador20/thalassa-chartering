@@ -13,6 +13,10 @@ const nextConfig = {
     dirs: ['src', 'scripts', 'tests'],
   },
   experimental: {
+    // Argon2 selects its native binary at runtime in Vercel's Linux functions.
+    outputFileTracingIncludes: {
+      '/*': ['./node_modules/argon2/prebuilds/linux-x64/argon2.glibc.node'],
+    },
     // Next 14 keeps @aws-sdk/client-s3 external by default but would bundle the
     // presigner, mixing two copies of the SDK's internals. Keep both external.
     serverComponentsExternalPackages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'],
